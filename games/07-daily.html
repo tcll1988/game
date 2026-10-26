@@ -5,7 +5,7 @@
   日本の学生は漢字を見ると意味で満足してしまうので、まず音だけで字を選ばせ、思い出し問題はピンインの声調で出す。
 ■一局：1〜2分。毎日続けると連続日数が伸びる。
 ■画面：今日（日付・連続日数）→ ①聞いて漢字を選ぶ（まちがえたら選択肢を並べ替えてもう一度。正解するまで「完了」にならない）
-  → ②単語カード（漢字・ピンイン・意味・品詞・音声）、「声に出して読んだ」を3回タップ → ③思い出しクイズ（1日前・3日前の語、
+  → ②単語カード（漢字・ピンイン・意味・品詞・音声）、「声に出して読んだ」を3回タップ → ③思い出しクイズ（1日前・3日前・7日前の語、
   覚えた語だけ）→ 完了。下にカレンダー（28日）と40語コレクション。
 ■素材：sample_words.json 40語・音声そのまま。今日の語は日付から決まる（40日で40語すべてが1回ずつ出る並び順）。
 ■難度：自動。思い出しクイズは声調だけ違う選択肢。
@@ -557,9 +557,11 @@ function s2() {
 G.$('#said').onclick = () => { const b = G.$('#said'); if (said >= 3 || b.disabled) return; said++; b.disabled = true; G.$('#saycnt').textContent = '●'.repeat(said) + '○'.repeat(3 - said);
   const n = said; let back = false; const en = () => { if (back) return; back = true; if (n !== said) return; if (said >= 3) G.after(400, s3); else b.disabled = false; };
   Promise.race([G.play(TW.audio), new Promise(r => G.after(4000, r))]).then(en); };
-function s3() {
-  rqs = [1, 3, 7].map(k => // 【合成：網頁版 Claude 07 の 1・3・7日後の復習を移植】（元は1日前・3日前だけ）
-    ({ k, w: wordOf(TODAY - k) })).filter(x => st.coll[x.w.hanzi] && x.w !== TW); ri = 0; rlog = [];
+function s3() { // 【合成：網頁版 Claude 07 の 1・3・7日後の復習を移植】（元は1日前・3日前だけ）
+  const seen = new Set(); // 周期の境目では1・3・7日前が別の周でも同じ語になることがあるため、同じ語は1回だけにする
+  rqs = [1, 3, 7].map(k => ({ k, w: wordOf(TODAY - k) }))
+    .filter(x => st.coll[x.w.hanzi] && x.w !== TW && !seen.has(x.w.hanzi) && seen.add(x.w.hanzi));
+  ri = 0; rlog = [];
   if (!rqs.length) return finish(); G.show('s3'); rask();
 }
 function rask() {

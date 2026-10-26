@@ -105,7 +105,7 @@ details{margin:8px 0}summary{cursor:pointer;min-height:44px;display:flex;align-i
   <p>依頼人はクラスの先生。「今日、高橋さんが授業に遅れてきました。いったい何があったのでしょう？」</p>
   <p>証言（本文）を読んで、質問の<b>答え</b>と、その<b>証拠になる一文</b>を見つけよう。最後に真相を推理します。</p></div>
   <div class="card"><h3 class="mt0">レベル</h3>
-  <div class="seg" id="lv"><button type="button" data-l="1" aria-pressed="true">初級（訳あり）</button><button type="button" data-l="2" aria-pressed="false">中級（中国語だけ）</button><button type="button" data-l="3" aria-pressed="false">上級（聞くだけ）</button></div>
+  <div class="seg" id="lv"><button type="button" data-l="1" aria-pressed="true">初級（訳あり）</button><button type="button" data-l="2" aria-pressed="false">中級（中国語だけ）</button><button type="button" data-l="3" aria-pressed="false">上級（音声だけ）</button></div>
   <p class="small" id="lvdesc"></p>
   <button class="btn" id="go" type="button">証言を読む</button>
   <p class="small" id="best"></p></div>
@@ -145,7 +145,7 @@ details{margin:8px 0}summary{cursor:pointer;min-height:44px;display:flex;align-i
   <button class="btn ghost" id="toTitle2" type="button">タイトルへ</button>
 </section>
 </main>
-<footer class="note">音声：先生の声をもとに合成（課文の録音） ／ 質問・選択肢・解説は ⚠先生確認</footer>
+<footer class="note">音声：先生の声をもとに合成（本文の録音） ／ 質問・選択肢・解説は ⚠先生確認</footer>
 <script>
 'use strict';
 /* 共通部品（各ファイルに同じものを埋め込み。外部ライブラリなし） */
@@ -339,7 +339,7 @@ const DED = { zh: '高桥为什么迟到了？', py: 'Gāoqiáo wèi shénme ch�
 let lv = 1, qi = 0, log = [], sel = { a: null, e: null }, done = false, dedOK = false;
 const st = G.load();
 // 【合成：網頁版 Claude 03 の Lv3「音声だけ」を移植】上級は本文の文字を出さず、音声だけで証拠の文を探す。
-const LVD = { 1: '質問の日本語訳あり。本文は「訳」ボタンで訳が見られます。', 2: '質問も本文も中国語だけ（ピンインは「ピンインを表示」）。', 3: '本文は文字なし・音声だけ。①〜⑨を聞いて証拠の文を選びます（答え合わせのあとに文字が出ます）。' };
+const LVD = { 1: '質問の日本語訳あり。本文は「訳」ボタンで訳が見られます。', 2: '質問も本文も中国語だけ・訳なし（ピンインはそのまま見えます。②の証拠の選択肢だけ「ピンインを表示」で見られます）。', 3: '本文は文字なし・音声だけ。①〜⑨を聞いて証拠の文を選びます（答え合わせのあとに正解の文が表示されます）。' };
 function setLv(n) { lv = n; G.$$('#lv button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.l === n))); G.$('#lvdesc').textContent = LVD[n]; }
 G.$$('#lv button').forEach(b => b.onclick = () => setLv(+b.dataset.l));
 function showBest() { G.$('#best').textContent = st.best != null ? `自己ベスト：${st.best} / 11 点` : ''; }

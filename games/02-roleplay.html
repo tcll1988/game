@@ -5,24 +5,24 @@
   量詞（盒儿・件）、把它包起来吧 などを、場面の目的（ミッション）と結びつけて覚える。日本の学生は文を訳で覚えがちなので、
   「何をしたいか（日本語のミッション）→中国語の一文」の向きで練習させる。まちがえると「ハプニング結末」が見られるので、
   なぜ違うかが記憶に残る（12種類集めたくなる）。
-■一局：2つのお店（お茶6文・シャツ7文、課文13文すべて）、選択6回。約4〜6分。
+■一局：2つのお店（お茶6文・シャツ7文、本文13文すべて）、選択6回。約4〜6分。
 ■画面：タイトル（モード、集めた結末 x/18）→ 会話中（店員の文＋音声、ミッション、選択肢4つ）
-  → 正解（課文どおり、自分の文の音声）／不正解（ハプニング結末・理由・その場面からやり直し）→ クリア（初回正解数、結末コレクション）
-  → 復習（課文13文を通しで、1文ずつ音声・ピンイン・訳）。
+  → 正解（本文どおり、自分の文の音声）／不正解（ハプニング結末・理由・その場面からやり直し）→ クリア（初回正解数、結末コレクション）
+  → 復習（本文13文を通しで、1文ずつ音声・ピンイン・訳）。
 ■素材：kaiwa_lesson10.js の13文を一字も変えずに使用（表示時に先頭の「A:」「B:」だけ外して話者を吹き出しで示す）。
   音声＝https://tcll1988.github.io/kaiwa-dokai/ ＋ 相対パス。新しく書いた内容：不正解の選択肢12文（中国語・ピンイン・訳）、
   結末12個、ミッション文 → すべて ⚠先生確認（我々の前回サンプルの review_items_B.csv と同じ内容）。
-  ⚠の表示は選択肢の上にまとめて1つだけ出し、どれが課文かは答えたあとに表示（⚠で答えが分からないようにする）。
-  選択肢には音声ボタンを付けない（課文の文だけ音声があると答えが分かるため）。並び順は毎回ランダム。
-■合成版（2026-10-26）：網頁版 Claude 02 の「店員（A）になる」役を移植。店員の番は、同じお店の店員の課文の文（重複を除く）から選ぶ。新しい中国語は作らない。
+  ⚠の表示は選択肢の上にまとめて1つだけ出し、どれが本文かは答えたあとに表示（⚠で答えが分からないようにする）。
+  選択肢には音声ボタンを付けない（本文の文だけ音声があると答えが分かるため）。並び順は毎回ランダム。
+■合成版（2026-10-26）：網頁版 Claude 02 の「店員（A）になる」役を移植。店員の番は、同じお店の店員の本文の文（重複を除く）から選ぶ。新しい中国語は作らない。
 ■難度：やさしい（店員の文に訳）／ふつう（訳なし、ピンインあり）／チャレンジ（ピンインは「ピンインを表示」で出す）。
-■前端レビュー後：選択肢は4つ（課文・課文を少し変えた「ありそうだけど違う」文・ハプニング文2つ）。選択肢の訳は答えたあとに出す
+■前端レビュー後：選択肢は4つ（本文・本文を少し変えた「ありそうだけど違う」文・ハプニング文2つ）。選択肢の訳は答えたあとに出す
   （訳とミッションを照らすだけで分かってしまうため）。結末は18種類。
 ■スマホ・iPhone：最初のタップで音声解錠。自動再生が止められても▶ボタンで聞ける。失敗は画面内に表示（alertなし）。
 ■効果の確かめ方：初回正解数と、どの場面でまちがえたかを端末に保存。授業前後で「ふつう」の初回正解数を比べる。
-  授業で課文の口頭再生テスト（ミッションを聞いて中国語で言う）と組み合わせる。
+  授業で本文の口頭再生テスト（ミッションを聞いて中国語で言う）と組み合わせる。
 ■リスク：選ぶだけなので発話力は直接は伸びない（08/11 と組み合わせる）。新作の文と結末は先生の確認が必要。
-  課文の和訳（例：10k-h-17「こちらはいかがと思いますか」）は教材のまま表示している。
+  本文の和訳（例：10k-h-17「こちらはいかがと思いますか」）は教材のまま表示している。
 -->
 <html lang="ja" data-game="02-roleplay">
 <head>
@@ -133,17 +133,17 @@ details{margin:8px 0}summary{cursor:pointer;min-height:44px;display:flex;align-i
 
 <section class="screen" id="result">
   <div class="card center"><h2>クリア！</h2><div id="score"></div></div>
-  <button class="btn" id="toReview" type="button">復習：課文を通して聞く</button>
+  <button class="btn" id="toReview" type="button">復習：本文を通して聞く</button>
   <button class="btn ghost" id="again" type="button">もう一度</button>
   <button class="btn ghost" id="toTitle" type="button">タイトルへ</button>
 </section>
 
 <section class="screen" id="review">
-  <div class="card"><h2>復習：会話 第10課（課文13文）</h2><p class="small">課文の文は教材のまま。▶で1文ずつ聞けます。</p><div id="rlist"></div></div>
+  <div class="card"><h2>復習：会話 第10課（本文13文）</h2><p class="small">本文の文は教材のまま。▶で1文ずつ聞けます。</p><div id="rlist"></div></div>
   <button class="btn ghost" id="toTitle2" type="button">タイトルへ</button>
 </section>
 </main>
-<footer class="note">音声：先生の声をもとに合成（課文の録音）</footer>
+<footer class="note">音声：先生の声をもとに合成（本文の録音）</footer>
 <script>
 'use strict';
 /* 共通部品（各ファイルに同じものを埋め込み。外部ライブラリなし） */
@@ -374,7 +374,7 @@ const STORY = {
     W11: { zh: '挺漂亮的，把我包起来吧。', py: 'Tǐng piàoliang de, bǎ wǒ bāo qǐlái ba.', ja: 'なかなかきれいです。私を包んでください。', e: ['プレゼントはあなた', 'あなたがきれいなリボンで包まれてしまった！', '包んでほしいのはシャツ。「把它包起来吧」の「它」はシャツのこと。'] },
     W12: { zh: '挺漂亮的，你买这件吧。', py: 'Tǐng piàoliang de, nǐ mǎi zhè jiàn ba.', ja: 'なかなかきれいです。あなたがこれを買ってください。', e: ['店員さんのお買いもの', '店員さんが自分でシャツを買って、うれしそうに帰っていった。', '買うのはあなた。「我买这件」と言おう。'] },
     // 成品確認後（追加テスト gb_fe opts で「いちばん長い文を選ぶ」が64%当たったため）：W1・W3・W9・W17 を少し長くして、正解の文が一番長くならないようにした（⚠先生確認）
-    // 前端レビュー後に追加：課文の文をほんの少し変えた「ありそうだけど違う」選択肢（ピンインの書き方も課文に合わせた）
+    // 前端レビュー後に追加：本文の文をほんの少し変えた「ありそうだけど違う」選択肢（ピンインの書き方も本文に合わせた）
     W13: { zh: '我想买乌龙茶。多少盒儿？', py: 'Wǒ xiǎng mǎi Wūlóngchá. Duōshǎo hér?', ja: 'ウーロン茶を買いたいです。何箱ですか。', e: ['何箱でもどうぞ', '店員さん「何箱でもありますよ！」…でも値段はわからないまま。', '「多少盒儿」は「何箱」。値段を聞くときは「多少钱一盒儿？」。'] },
     W14: { zh: '有点儿贵，我想买大一点儿的。', py: 'Yǒu diǎnr guì,wǒ xiǎng mǎi dà yìdiǎnr de.', ja: 'ちょっと高いです。もうちょっと大きいのを買いたいです。', e: ['もっと大きい箱', 'もっと大きい箱が出てきた。値段もさらに高くなった！', '高いと思ったら、ほしいのは「便宜一点儿的」（もう少し安いの）。'] },
     W15: { zh: '好，来二盒儿。', py: 'Hǎo, lái èr hér.', ja: '（「二」を使って）二箱ください。', e: ['店員さんがにっこり', '店員さん「两盒儿ですね」と言い直してくれた。', '量詞（盒儿・件など）の前の「2」は「两」。「二盒儿」とは言わない。'] },
@@ -386,20 +386,23 @@ const STORY = {
 const WKEYS = Object.keys(STORY.wrong);
 const st = G.load(); st.endings = st.endings || []; st.best = st.best || null;
 let role = 'B';
-// 【合成：網頁版 Claude 02 から移植】「店員（A）になる」モード。選択肢は同じお店の店員（A）の課文の文だけ（新しい文は作らない、⚠なし）。
-const RD = { B: 'お客さんになって、ミッションに合う一文を選びます。まちがえるとハプニング結末。', A: '店員さんになって、お客さんの話のあとに言う一文を、同じお店の課文の文から選びます（選択7回）。' };
+// 【合成：網頁版 Claude 02 から移植】「店員（A）になる」モード。選択肢は同じお店の店員（A）の本文の文だけ（新しい文は作らない、⚠なし）。
+const RD = { B: 'お客さんになって、ミッションに合う一文を選びます。まちがえるとハプニング結末。', A: '店員さんになって、お客さんの話のあとに言う一文を、同じお店の本文の文から選びます（選択7回）。' };
 function setRole(r) { role = r; G.$$('#role button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.r === r))); G.$('#rdesc').textContent = RD[r]; }
 G.$$('#role button').forEach(b => b.onclick = () => setRole(b.dataset.r));
 const SHOPA = [{ name: 'お茶の店', lines: ['10k-h-1', '10k-h-2', '10k-h-3', '10k-h-4', '10k-h-5', '10k-h-6', '10k-h-7'] }, { name: '服の店', lines: ['10k-h-15', '10k-h-16', '10k-h-17', '10k-h-18', '10k-h-19', '10k-h-20'] }];
 const isA = id => /^A/.test(LINE[id].ch);
 const NA = SHOPA.reduce((n, s) => n + s.lines.filter(isA).length, 0);
+// 「好的。」(10k-h-19) は「我想买件衬衣。」の直後の返事としても成り立ってしまうため、
+// 10k-h-17 を正解とする問いの選択肢には出さない（⚠先生確認）
+const A_HIDE = { '10k-h-17': ['10k-h-19'] };
 let aStep = 0, aNo = 0;
 function startA(fromShop = 0) {
   G.clearAll(); G.stopAudio(); if (fromShop === 0) { firstTry = 0; tried = {}; aNo = 0; }
   shop = fromShop; aStep = 0; G.$('#chat').innerHTML = ''; G.show('play'); advanceA();
 }
 function advanceA() {
-  const s = SHOPA[shop]; G.$('#place').textContent = '📍 ' + s.name + '（' + (shop + 1) + '/2）　あなた：店員（A）';
+  const s = SHOPA[shop]; G.$('#place').textContent = '📍 ' + s.name + '（' + (shop + 1) + '/2）　あなた（店員（A））';
   G.$('#ask').innerHTML = '';
   if (aStep >= s.lines.length) {
     if (shop === 0) { G.$('#ask').append(G.h('div', { class: 'fb info' }, 'お茶が売れた！ つぎは服の店へ。'), G.h('button', { class: 'btn', type: 'button', onclick: G.guard()(() => { shop = 1; aStep = 0; G.$('#chat').innerHTML = ''; advanceA(); }) }, '次へ（服の店）')); return; }
@@ -410,15 +413,15 @@ function advanceA() {
   askA(id);
 }
 function bubbleR(l, me) {
-  const b = G.h('div', { class: 'bub' + (me ? ' me' : '') }, G.h('span', { class: 'who' }, me ? 'あなた（店員 A）' : 'お客さん（B）'), G.zh(strip(l.ch), 'mid'), G.py(l.py), mode === 'easy' ? G.ja(l.jp) : null, G.audioBtn(url(l)));
+  const b = G.h('div', { class: 'bub' + (me ? ' me' : '') }, G.h('span', { class: 'who' }, me ? 'あなた（店員（A））' : 'お客さん（B）'), G.zh(strip(l.ch), 'mid'), G.py(l.py), mode === 'easy' ? G.ja(l.jp) : null, G.audioBtn(url(l)));
   G.$('#chat').append(b); b.scrollIntoView({ block: 'end', behavior: G.reduce() ? 'auto' : 'smooth' });
 }
 function askA(id) {
   aNo++; const key = shop + ':' + id; G.$('#hud').textContent = '店員のセリフ ' + Math.min(aNo, NA) + '/' + NA;
   const box = G.$('#ask'); box.innerHTML = '';
-  box.append(G.h('div', { class: 'goal' }, '🎯 店員として、次に言う一文を選ぼう（選択肢はすべてこのお店の課文の文）'));
-  const seen = new Set([strip(LINE[id].ch)]), others = [];
-  SHOPA[shop].lines.filter(isA).forEach(x => { const t = strip(LINE[x].ch); if (x !== id && !seen.has(t)) { seen.add(t); others.push(x); } });
+  box.append(G.h('div', { class: 'goal' }, '🎯 店員として、次に言う一文を選ぼう（選択肢はすべてこのお店の本文の文）'));
+  const seen = new Set([strip(LINE[id].ch)]), others = [], hide = A_HIDE[id] || [];
+  SHOPA[shop].lines.filter(isA).forEach(x => { const t = strip(LINE[x].ch); if (x !== id && !seen.has(t) && !hide.includes(x)) { seen.add(t); others.push(x); } });
   const opts = G.shuffle([id, ...G.pick(others, 3)]);
   const list = G.h('div', { class: 'opts' });
   let busy = false;
@@ -430,12 +433,13 @@ function askA(id) {
       if (x === id) {
         busy = true; G.lock(list); if (first) firstTry++;
         b.classList.add('ok'); bubbleR(LINE[id], true); G.play(url(LINE[id])); aStep++;
-        box.append(G.h('div', { class: 'fb ok' }, G.h('b', {}, '○ 課文どおり！ '), mode === 'hard' ? G.py(LINE[id].py) : null, G.ja(LINE[id].jp)));
+        const old = G.$('#afb', box); if (old) old.remove();
+        box.append(G.h('div', { class: 'fb ok' }, G.h('b', {}, '○ 本文どおり！ '), mode === 'hard' ? G.py(LINE[id].py) : null, G.ja(LINE[id].jp)));
         const nx = G.h('button', { class: 'btn stick', type: 'button', onclick: G.guard()(advanceA) }, '次へ'); box.append(nx); G.reveal(nx);
       } else {
         b.classList.add('ng', 'shake'); b.disabled = true;
         const old = G.$('#afb', box); if (old) old.remove();
-        const fb = G.h('div', { class: 'fb ng', id: 'afb' }, G.h('b', {}, '× ここでは言いません。'), ' 「', G.zh(strip(LINE[x].ch)), '」は「', LINE[x].jp.replace(/[。．]$/, ''), '」という意味です。お客さんの話をもう一度聞いて、選び直そう。');
+        const fb = G.h('div', { class: 'fb ng', id: 'afb' }, G.h('b', {}, '× ここで言う文ではありません。'), ' 「', G.zh(strip(LINE[x].ch)), '」は「', LINE[x].jp.replace(/[。．]$/, ''), '」という意味です。お客さんの話をもう一度聞いて、選び直そう。');
         box.append(fb); G.reveal(fb);
       }
     };
@@ -455,7 +459,7 @@ function renderCol() {
   G.$('#ecount').textContent = `${st.endings.length} / ${WKEYS.length}`;
 }
 function bubble(l, me) {
-  const b = G.h('div', { class: 'bub' + (me ? ' me' : '') }, G.h('span', { class: 'who' }, me ? 'あなた（B）' : '店員（A）'), G.zh(strip(l.ch), 'mid'), G.py(l.py), mode === 'easy' ? G.ja(l.jp) : null, G.audioBtn(url(l)));
+  const b = G.h('div', { class: 'bub' + (me ? ' me' : '') }, G.h('span', { class: 'who' }, me ? 'あなた（お客さん（B））' : '店員（A）'), G.zh(strip(l.ch), 'mid'), G.py(l.py), mode === 'easy' ? G.ja(l.jp) : null, G.audioBtn(url(l)));
   G.$('#chat').append(b); b.scrollIntoView({ block: 'end', behavior: G.reduce() ? 'auto' : 'smooth' });
 }
 function start(fromShop = 0, fromStep = 0) {
@@ -479,7 +483,7 @@ function ask(cid) {
   G.$('#hud').textContent = 'ミッション ' + (Object.keys(STORY.choice).indexOf(cid) + 1) + '/6';
   const box = G.$('#ask'); box.innerHTML = '';
   box.append(G.h('div', { class: 'goal' }, '🎯 ' + c.goal));
-  box.append(G.h('p', { class: 'small' }, G.chk(), ' 選択肢には練習用に新しく作った文が含まれます。どれが課文かは答えたあとに表示します。'));
+  box.append(G.h('p', { class: 'small' }, G.chk(), ' 選択肢には練習用に新しく作った文が含まれます。どれが本文かは答えたあとに表示します。'));
   const opts = G.shuffle([{ ok: true, l: LINE[c.ok] }, ...c.ng.map(k => ({ ok: false, k, w: STORY.wrong[k] }))]);
   const list = G.h('div', { class: 'opts' }); const once = G.guard();
   opts.forEach(o => {
@@ -496,7 +500,7 @@ function choose(o, b, list) {
   if (!tried[curChoice]) { tried[curChoice] = 1; if (o.ok) firstTry++; }
   if (o.ok) {
     b.classList.add('ok'); bubble(o.l, true); G.play(url(o.l)); step++;
-    G.$('#ask').append(G.h('div', { class: 'fb ok' }, G.h('b', {}, '○ 課文どおり！ '), G.kb('課文'), mode === 'hard' ? G.py(o.l.py) : null, G.ja(o.l.jp)));
+    G.$('#ask').append(G.h('div', { class: 'fb ok' }, G.h('b', {}, '○ 本文どおり！ '), G.kb('本文'), mode === 'hard' ? G.py(o.l.py) : null, G.ja(o.l.jp)));
     G.$('#ask').append(G.h('button', { class: 'btn stick', type: 'button', onclick: G.guard()(advance) }, '次へ'));
   } else {
     b.classList.add('ng'); G.stopAudio();
@@ -525,7 +529,7 @@ function finish() {
 }
 function renderReview() {
   const box = G.$('#rlist'); box.innerHTML = '';
-  KAIWA.forEach(l => box.append(G.h('div', { class: 'bub' + (/^B/.test(l.ch) ? ' me' : ''), style: 'margin:8px 0;max-width:100%' }, G.h('span', { class: 'who' }, /^B/.test(l.ch) ? 'B（お客さん）' : 'A（店員）'), G.zh(strip(l.ch), 'mid'), G.py(l.py), G.ja(l.jp), G.audioBtn(url(l)))));
+  KAIWA.forEach(l => box.append(G.h('div', { class: 'bub' + (/^B/.test(l.ch) ? ' me' : ''), style: 'margin:8px 0;max-width:100%' }, G.h('span', { class: 'who' }, /^B/.test(l.ch) ? 'お客さん（B）' : '店員（A）'), G.zh(strip(l.ch), 'mid'), G.py(l.py), G.ja(l.jp), G.audioBtn(url(l)))));
 }
 G.$('#go').onclick = () => role === 'A' ? startA() : start();
 G.$('#again').onclick = () => role === 'A' ? startA() : start();

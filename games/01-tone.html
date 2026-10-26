@@ -90,7 +90,10 @@ details{margin:8px 0}summary{cursor:pointer;min-height:44px;display:flex;align-i
 .slot{min-width:72px;padding:6px 8px;border:2px dashed var(--line);border-radius:12px;text-align:center;background:#fff}
 .slot.cur{border-color:var(--pri);border-style:solid}
 .cv{display:block;margin:4px auto 0}.cv .gl{stroke:#d9d4c7;stroke-width:1}.cv .c{stroke:#1f7a4d;stroke-width:3.6;stroke-linecap:round;stroke-linejoin:round;fill:none}.cv circle.c{fill:#1f7a4d;stroke:none}.cv .cu{stroke:#b3261e;stroke-width:2.6;stroke-dasharray:3 3.5;stroke-linecap:round;fill:none}.cv circle.cu{fill:none;stroke:#b3261e;stroke-width:2}
-.legend{font-size:14px;color:#555;text-align:center}
+.legend{font-size:16px;color:#333;text-align:center;margin:4px 0 0}
+.lg{display:block;font-size:16px;line-height:1.35;font-weight:700;white-space:nowrap;margin-top:2px}
+.lg i{display:inline-block;width:16px;height:0;vertical-align:middle;margin-right:3px;border-top:3px solid}
+.lg.c{color:#1f7a4d}.lg.c i{border-top-color:#1f7a4d}.lg.cu{color:#b3261e}.lg.cu i{border-top:3px dashed #b3261e}
 .slot .s{font-size:18px;font-family:inherit}.slot .t{font-size:22px;min-height:30px;font-weight:700;color:var(--pri)}
 .slot.ok{border:2px solid var(--ok);background:var(--okbg)}.slot.ng{border:2px solid var(--ng);background:var(--ngbg)}
 .tones{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
@@ -131,6 +134,7 @@ details{margin:8px 0}summary{cursor:pointer;min-height:44px;display:flex;align-i
     <div style="margin-top:8px"><button class="audio" id="replay" type="button">▶ もう一度聞く</button></div>
     <div id="astat"></div>
     <div class="slots" id="slots"></div>
+    <p class="legend" id="lgd" hidden>線＝音の高さ（上ほど高い）</p>
   </div>
   <div id="pad"></div>
   <div class="row"><button class="btn ghost" id="undo" type="button">1つ消す</button><button class="btn" id="check" type="button" disabled>答え合わせ</button></div>
@@ -539,7 +543,8 @@ const NOTE = { // ⚠先生確認：変調・読み方のメモ（教材の表�
   '对不起': '「不」は軽く読まれて軽声（bu）。⚠先生確認'
 };
 function icon(t) { // 五度の線（1:55 2:35 3:214 4:51 0:点）
-  const P = { 1: 'M4 6 L36 6', 2: 'M4 22 L36 6', 3: 'M4 14 L18 26 L36 8', 4: 'M4 6 L36 26' };
+  // 曲線（contour）と同じ5段階：y = 26 − (段−1)×5。1声 5→5、2声 3→5、3声 2→1→4、4声 5→1
+  const P = { 1: 'M4 6 L36 6', 2: 'M4 16 L36 6', 3: 'M4 21 L18.4 26 L36 11', 4: 'M4 6 L36 26' };
   const svg = t ? `<svg width="40" height="30" viewBox="0 0 40 30" aria-hidden="true"><path d="${P[t]}" stroke="#2f5d8a" stroke-width="4" fill="none" stroke-linecap="round"/></svg>` : `<svg width="40" height="30" viewBox="0 0 40 30" aria-hidden="true"><circle cx="20" cy="18" r="5" fill="#2f5d8a"/></svg>`;
   return svg;
 }
@@ -586,7 +591,7 @@ function ask() {
   G.$('#prog').style.width = (100 * qi / qs.length) + '%';
   const hz = G.$('#qhz'); hz.innerHTML = ''; hz.append(G.zh(w.hanzi, 'big'));
   G.$('#qja').textContent = w.ja;
-  G.$('#fb').innerHTML = ''; G.$('#next').style.display = 'none';
+  G.$('#fb').innerHTML = ''; G.$('#next').style.display = 'none'; G.$('#lgd').hidden = true;
   renderSlots(); renderPad();
   G.$('#check').disabled = true; G.$('#undo').disabled = false;
   G.play(w.audio);
@@ -598,8 +603,11 @@ function renderSlots(res) {
     const t = input[i];
     const el = G.h('div', { class: 'slot' + (res ? (res[i] ? ' ok' : ' ng') : (i === input.length ? ' cur' : '')) },
       G.h('div', { class: 's', lang: 'zh-Latn-pinyin' }, shown),
-      G.h('div', { class: 't' }, t == null ? '？' : (res ? (res[i] ? '○ ' : '× ') + TONE_NAME[t] : TONE_NAME[t])),
-      res ? G.h('div', { html: contour(s[1], i ? w.syl[i - 1][1] : 0, t) }) : null);
+      G.h('div', { class: 't' }, t == null ? '？' : (res ? (res[i] ? '○' : '×') : TONE_NAME[t])),
+      // 答え合わせ後：曲線のすぐ下に凡例。緑の実線＝正解の声調、赤い点線＝自分の答え（まちがえたときだけ）
+      res ? G.h('div', { html: contour(s[1], i ? w.syl[i - 1][1] : 0, t) }) : null,
+      res ? G.h('span', { class: 'lg c' }, G.h('i', {}), '正解 ' + TONE_NAME[s[1]]) : null,
+      res && !res[i] ? G.h('span', { class: 'lg cu' }, G.h('i', {}), 'あなた ' + TONE_NAME[t]) : null);
     box.append(el);
   });
 }
@@ -630,7 +638,7 @@ G.$('#check').onclick = () => {
     G.h('b', {}, all ? '正解！' : '不正解'), ' 正しくは ', G.h('span', { lang: 'zh-Latn-pinyin', style: 'font-size:18px;font-weight:700' }, w.pinyin),
     '（' + w.syl.map(s => TONE_NAME[s[1]]).join('・') + '）',
     NOTE[w.hanzi] ? G.h('p', { class: 'small' }, NOTE[w.hanzi]) : null);
-  G.$('#fb').append(fb, G.h('p', { class: 'legend' }, '線＝音の高さ（五度標記）。緑：正しい声調' + (all ? '' : '／赤い点線：あなたの答え')));
+  G.$('#fb').append(fb); G.$('#lgd').hidden = false;
   if (!all) G.play(w.audio);
   G.save(st);
   const nx = G.$('#next'); nx.textContent = qi + 1 < qs.length ? '次へ' : '結果を見る'; nx.style.display = 'block'; nx.disabled = false; G.reveal(nx); // 前端共通指摘：答えたあと「次へ」を画面内に

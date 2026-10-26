@@ -84,16 +84,20 @@ details{margin:8px 0}summary{cursor:pointer;min-height:44px;display:flex;align-i
 /* 前端共通指摘：G.reveal() で出した「次へ」が固定フッターの下に隠れないように */
 .btn,.fb{scroll-margin-bottom:calc(var(--fh,56px) + 14px);scroll-margin-top:64px}
 
-.slot{min-height:60px;border:2px dashed var(--line);border-radius:12px;padding:6px;margin:8px 0;background:#fffdf7}
+.slot{min-height:60px;border:2px dashed var(--line);border-radius:12px;padding:4px;margin:6px 0;background:#fffdf7}
+#play>.card{padding:8px}
 .slot:empty::before{content:'ここに順番に並びます（下のカードをタップ）';color:#666;font-size:14px;display:block;padding:12px}
-.crd{display:flex;gap:6px;align-items:stretch;margin:6px 0}
-.crd .main{flex:1;text-align:left;min-height:56px;border-radius:12px;border:2px solid var(--line);background:#fff;padding:8px 10px;font-size:17px;line-height:1.45}
+/* 360幅で1画面に多く並ぶように：↑と🔊を右の1列に縦に重ね、本文の幅を広げる */
+.crd{display:grid;grid-template-columns:minmax(0,1fr) 44px;grid-auto-rows:minmax(44px,auto);gap:4px 5px;margin:5px 0}
+.crd .main{grid-column:1;grid-row:1/span 2;text-align:left;min-height:48px;border-radius:12px;border:2px solid var(--line);background:#fff;padding:5px 8px;font-size:16px;line-height:1.4}
+.crd .up,.crd .snd{grid-column:2}
 .crd .main .num{display:inline-block;min-width:24px;height:24px;border-radius:12px;background:var(--pri);color:#fff;text-align:center;font-weight:700;font-size:14px;line-height:24px;margin-right:6px}
-.crd .snd{min-width:48px;min-height:48px;border-radius:12px;border:2px solid var(--line);background:#fff;font-size:18px}
+.crd .snd{min-width:44px;min-height:44px;padding:0;border-radius:12px;border:2px solid var(--line);background:#fff;font-size:18px}
 .crd.ng .main{border-color:var(--ng);background:#fff1f1}.crd.ok .main{border-color:var(--ok);background:#effaf1}
 mark{background:#ffe08a;padding:0 1px;border-radius:3px}
 .crd .py{display:block;font-size:16px}.crd .ja{display:block;font-size:16px;color:#555}
-.crd .up{min-width:48px;min-height:48px;border-radius:12px;border:2px solid var(--line);background:#fff;font-size:18px}
+.crd .up{min-width:44px;min-height:44px;padding:0;border-radius:12px;border:2px solid var(--line);background:#fff;font-size:18px}
+#fb .fb{margin:6px 0 2px;padding:6px 10px;line-height:1.45}#fb .fb p{margin:2px 0 0}
 </style>
 </head>
 <body>
@@ -372,8 +376,9 @@ G.$('#judge').onclick = () => {
     G.$('#listenAll').style.display = ''; const tq = G.$('#toQuiz'); tq.style.display = ''; tq.disabled = false; tq.textContent = lv === 1 ? '結果へ' : '次へ（なぜ？ 4問）'; G.reveal(fb);
   } else {
     render(bad); const [a, b] = bad[0];
-    fb.append(G.h('div', { class: 'fb ng' }, G.h('b', {}, '赤いカードの順番を見直しましょう（' + bad.length + 'か所）'),
-      G.h('p', { class: 'small' }, 'たとえば：', G.zh(short(S_(b).zh)), ' と ', G.zh(short(S_(a).zh)), ' の前後'), G.h('p', { class: 'small' }, '（並べたカードはタップで外せます。↑で1つ上へ）')));
+    // 判定後もページが伸びすぎないよう、ヒントは2行程度にまとめる
+    fb.append(G.h('div', { class: 'fb ng' }, G.h('b', {}, '赤いカードの順番を見直そう（' + bad.length + 'か所）'),
+      G.h('p', { class: 'small' }, 'たとえば ', G.zh(short(S_(b).zh)), ' と ', G.zh(short(S_(a).zh)), ' の前後。タップで外す／↑で1つ上へ')));
     G.reveal(fb);
     // 並びを変えるまで判定ボタンは押せない（連打で判定回数が増えないように）
   }

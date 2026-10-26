@@ -87,6 +87,7 @@ details{margin:8px 0}summary{cursor:pointer;min-height:44px;display:flex;align-i
 .tile.sel{border-color:#2f5d8a;background:#e8f0f8;box-shadow:0 0 0 2px #2f5d8a inset}
 .tile.done{border-color:#9fd3b6;background:#e5f5ec;opacity:.75}
 .made{min-height:28px;font-size:15px}
+.made .fb{padding:6px 10px;margin:6px 0;line-height:1.4}.made .fb p.small{margin:2px 0 0}.made .fb .audio,.made .fb button{vertical-align:middle}
 </style>
 </head>
 <body>
@@ -103,7 +104,7 @@ details{margin:8px 0}summary{cursor:pointer;min-height:44px;display:flex;align-i
   <p class="small center" id="pinfo"></p>
   <div class="board"><div class="col" id="nouns"></div><div class="col" id="mws"></div></div>
   <div class="made" id="made"></div><div id="fb"></div><div id="astat"></div>
-  <button class="btn stick" id="next" type="button" style="display:none">次の盤面へ</button>
+  <button class="btn" id="next" type="button" style="display:none">次の盤面へ</button>
 </section>
 <section class="screen" id="quiz">
   <div class="bar"><i id="qbar"></i></div>
@@ -573,7 +574,7 @@ function choose(t, kind, v) {
     [nt, mt].forEach(x => { x.classList.add('done'); x.disabled = true; }); matched++;
     const ph = phrase(n, m);
     G.$('#made').prepend(G.h('div', { class: 'fb ok' }, G.zh(ph.z, 'mid'), ' ', G.h('span', { lang: 'zh-Latn-pinyin' }, ph.p), '　' + n.j, n.audio ? G.audioBtn(n.audio, '▶ ' + n.z) : null, G.h('p', { class: 'small' }, '「' + m + '」：' + MW[m][1] + ' ', G.chk())));
-    if (matched === 4) { const nx = G.$('#next'); nx.textContent = bi + 1 < boards.length ? '次の盤面へ' : '結果を見る'; nx.style.display = 'block'; nx.disabled = false; }
+    if (matched === 4) { const nx = G.$('#next'); nx.textContent = bi + 1 < boards.length ? '次の盤面へ' : '結果を見る'; nx.style.display = 'block'; nx.disabled = false; G.reveal(nx); } // 固定せず「できたことば」の下に出し、そこまでスクロール
   } else {
     coolUntil = performance.now() + 400; mistakes.push({ n, m }); st.pairMiss[n.z + '×' + m] = (st.pairMiss[n.z + '×' + m] || 0) + 1; G.save(st);
     [nt, mt].forEach(x => { x.classList.remove('shake'); void x.offsetWidth; x.classList.add('shake'); });
