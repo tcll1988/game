@@ -507,7 +507,8 @@ const WORDS = [
 ];
 const WORD_SYL = {"爱": [["ài", 4]], "八": [["bā", 1]], "爸爸": [["bà", 4], ["ba", 0]], "北京": [["Běi", 3], ["jīng", 1]], "杯子": [["bēi", 1], ["zi", 0]], "本": [["běn", 3]], "不": [["bù", 4]], "不客气": [["bú", 2], ["kè", 4], ["qi", 0]], "菜": [["cài", 4]], "茶": [["chá", 2]], "吃": [["chī", 1]], "出租车": [["chū", 1], ["zū", 1], ["chē", 1]], "大": [["dà", 4]], "打电话": [["dǎ", 3], ["diàn", 4], ["huà", 4]], "的": [["de", 0]], "点": [["diǎn", 3]], "电脑": [["diàn", 4], ["nǎo", 3]], "电视": [["diàn", 4], ["shì", 4]], "电影": [["diàn", 4], ["yǐng", 3]], "东西": [["dōng", 1], ["xi", 0]], "都": [["dōu", 1]], "读": [["dú", 2]], "对不起": [["duì", 4], ["bu", 0], ["qǐ", 3]], "多": [["duō", 1]], "多少": [["duō", 1], ["shǎo", 3]], "二": [["èr", 4]], "儿子": [["ér", 2], ["zi", 0]], "饭馆": [["fàn", 4], ["guǎn", 3]], "飞机": [["fēi", 1], ["jī", 1]], "分钟": [["fēn", 1], ["zhōng", 1]], "高兴": [["gāo", 1], ["xìng", 4]], "个": [["gè", 4]], "工作": [["gōng", 1], ["zuò", 4]], "狗": [["gǒu", 3]], "汉语": [["Hàn", 4], ["yǔ", 3]], "好": [["hǎo", 3]], "和": [["hé", 2]], "喝": [["hē", 1]], "很": [["hěn", 3]], "回": [["huí", 2]]};
 function isoWeek(d = new Date()) { const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); const day = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - day); const y = t.getUTCFullYear(); const w = Math.ceil(((t - Date.UTC(y, 0, 1)) / 864e5 + 1) / 7); return { key: `${y}-W${String(w).padStart(2, '0')}`, sun: (() => { const s = new Date(d); s.setDate(d.getDate() + (7 - (d.getDay() || 7))); return s; })() }; }
-const wkLabel = k => `第${+String(k).slice(-2)}週`; // 画面表示用：2026-W43 → 第43週（提出コードの中身は変えない）
+// 画面表示用：2026-W43 → 第43週（提出コードの中身は変えない）。形式がちがう・週番号が1〜53でないときは元の文字列をそのまま返す（「第NaN週」「第0週」を出さない）
+const wkLabel = k => { const s = String(k == null ? '' : k), m = /^\d{4}-W(\d{1,2})$/.exec(s), n = m ? +m[1] : 0; return n >= 1 && n <= 53 ? `第${n}週` : s; };
 const hash = s => { let x = 2166136261; for (const ch of s) { x ^= ch.codePointAt(0); x = Math.imul(x, 16777619) >>> 0; } return x; };
 const V = { a: 'āáǎà', e: 'ēéěè', i: 'īíǐì', o: 'ōóǒò', u: 'ūúǔù', 'ü': 'ǖǘǚǜ' };
 function mark(syl, tone) { // 声調記号をつける（a,e優先、ou→o、それ以外は最後の母音）
@@ -604,14 +605,15 @@ G.$('#tally').onclick = () => {
   G.$('#codes').value.split(/\n/).map(s => s.trim()).filter(Boolean).forEach(line => {
     const p = line.split('|'); if (p[0] !== 'GB06' || p.length < 7) return bad.push(line);
     const sum = p.pop(), body = p.slice(1).join('|'); const valid = ck(body) === sum;
-    const r = { name: p[1], wk: p[2], score: +p[3], sec: +p[4], miss: p[5], practice: p[6] === 'P', valid };
+    const r = { name: p[1], wk: p[2], score: +p[3], sec: +p[4], rawScore: p[3], rawSec: p[4], miss: p[5], practice: p[6] === 'P', valid };
     const dk = r.name + '|' + r.wk; if (valid && seenK.has(dk)) { dup++; return; } if (valid) seenK.add(dk); rows.push(r); // 同じ名前・同じ週は最初の1つだけ数える
     if (valid) r.miss.split('.').filter(x => x && x !== '0').forEach(n => missCount[n] = (missCount[n] || 0) + 1);
   });
-  rows.sort((a, b) => b.valid - a.valid || b.score - a.score || a.sec - b.sec);
+  rows.sort((a, b) => b.valid - a.valid || (b.score || 0) - (a.score || 0) || (a.sec || 0) - (b.sec || 0));
   const out = G.$('#tout'); out.innerHTML = '';
   const tb = G.h('table', {}, G.h('tr', {}, ...['順位', '名前', '週', '点', '秒', '確認'].map(x => G.h('th', {}, x))));
-  rows.forEach((r, i) => tb.append(G.h('tr', {}, G.h('td', {}, r.valid ? String(i + 1) : '—'), G.h('td', {}, r.name), G.h('td', {}, wkLabel(r.wk)), G.h('td', {}, String(r.score)), G.h('td', {}, String(r.sec)), G.h('td', {}, r.valid ? 'OK' : '✗ 不一致'))));
+  rows.forEach((r, i) => tb.append(G.h('tr', {}, G.h('td', {}, r.valid ? String(i + 1) : '—'), G.h('td', {}, r.name), G.h('td', {}, r.valid ? wkLabel(r.wk) : r.wk), G.h('td', {}, r.valid ? String(r.score) : r.rawScore), G.h('td', {}, r.valid ? String(r.sec) : r.rawSec), // 不一致のコードは書きかえの可能性があるので、週・点・秒は加工せず元の文字のまま
+    G.h('td', r.valid ? {} : { style: 'color:var(--ng);font-weight:700' }, r.valid ? 'OK' : '✗ コード不一致（確認してください）'))));
   out.append(tb);
   const mc = Object.entries(missCount).sort((a, b) => b[1] - a[1]); if (mc.length) out.append(G.h('p', { class: 'small' }, 'まちがいが多い問題：' + mc.slice(0, 5).map(([n, c]) => `第${n}問（${c}人）`).join('、')));
   if (dup) out.append(G.h('p', { class: 'small' }, `同じ名前・同じ週の2つ目以降：${dup}行（数えていません）`));
