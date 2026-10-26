@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<!--
+【05 聞いてたたけ！ピンイン・モグラ】 設計メモ（合成版：Grok Bot 版を土台に、各AI版の検証済みの長所を統合）
+■学習目標：先生の声（合成）を聞いて、すぐに漢字（とピンイン）を見つける「音→字」の即時の結びつき。
+  日本の学生は漢字を見れば意味は分かるが、音を聞いて字が浮かばないことが多い。時間制限で「訳さずに反応する」練習にする。
+■一局：10問、1問5〜7秒。約2〜3分。
+■画面：タイトル（レベル、ベスト）→ ゲーム中（音声が流れ、穴からモグラ＝語カードが出たり入ったりする。正しい語をタップ）
+  → 不正解／時間切れ（正解の語・ピンイン・意味・もう一度聞く）→ 結果（命中数、スコア、最大コンボ、平均反応時間）
+  → 復習（外した語の一覧と音声、外した語だけもう一度）。
+■素材：sample_words.json の40語と audio をそのまま使用。新しく書いた内容は画面の説明のみ（⚠先生確認）。
+■難度：①3穴・ピンイン付き・7秒 ②6穴・漢字＋ピンイン・6秒 ③6穴・漢字だけ・5秒、音の似た語（同じ頭文字・同じ声調型）を多めに混ぜる。
+■タイマー：1問ごとに締め切り時刻を決め、残り時間＝締め切り−現在（0未満にしない）。新しい問題・もう一度・タイトルへで
+  必ず全タイマーを止める。「もう一度聞く」はタイマーに触らない（前回の豆包05の「押すたびにタイマーが増える」不具合を避ける）。
+  答えたらすぐ盤面をロック（連打で2問進まない）。
+■出現順（前端レビュー後）：正解のモグラが初めて出るのは、はずれが0〜3匹出たあと（毎回ランダム）。「最初の1匹を叩く」も「最初は叩かない」も当てにならない（最初が正解になるのは約1/4〜1/3）。
+  音声が再生できなかったときは時間を止め、ピンインを文字で表示して「再開する」で続ける。反応時間は正解のモグラが出てから測る。
+■スマホ・iPhone：最初の「スタート」タップで音声を解錠。穴は 375px 幅で 3列、各ボタン 100px 前後。
+■効果の確かめ方：語ごとの反応時間と正答を保存。同じ語の反応時間が授業前後で短くなるかを見る。
+■リスク：速さを競うので、音が聞こえにくい環境（電車など）では不利。合成音声の聞き取りやすさは先生の確認が必要。
+-->
+<html lang="ja" data-game="05-whack">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>ピンイン・モグラ｜05</title>
+<style>:root{--bg:#f6f4ef;--card:#fff;--ink:#222;--sub:#666;--line:#d9d4c7;--pri:#2f5d8a;--pri2:#e8f0f8;--ok:#1f7a4d;--okbg:#e5f5ec;--ng:#b3261e;--ngbg:#fde9e7;--warn:#8a5a00;--warnbg:#fff4d6;--r:14px}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Noto Sans CJK JP",Meiryo,sans-serif;padding:0 0 calc(var(--fh,56px) + 12px)}
+.wrap{max-width:560px;margin:0 auto;padding:12px 14px}
+header.top{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--pri);color:#fff;position:sticky;top:0;z-index:5}
+header.top a.home{display:inline-flex;align-items:center;min-height:44px;min-width:44px;padding:0 10px;border:1px solid rgba(255,255,255,.65);border-radius:10px;color:#fff;text-decoration:none;font-size:14px;white-space:nowrap}
+header.top h1{font-size:17px;margin:0;flex:1;line-height:1.3}
+header.top .hud{font-size:14px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.screen{display:none}.screen.on{display:block;animation:fade .18s ease}
+@keyframes fade{from{opacity:.3}to{opacity:1}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin:10px 0}
+h2{font-size:19px;margin:6px 0 8px}h3{font-size:16px;margin:12px 0 6px}
+p{margin:6px 0}.sub{color:var(--sub);font-size:15px}.small{font-size:14px;color:#555}
+button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation}
+.btn{display:block;width:100%;min-height:52px;margin:8px 0;padding:10px 14px;border-radius:12px;border:1px solid var(--pri);background:var(--pri);color:#fff;font-size:17px;font-weight:600}
+.btn.ghost{background:#fff;color:var(--pri)}
+.btn.inline{display:inline-block;width:auto;min-width:44px;min-height:44px;padding:6px 14px;font-size:15px;margin:4px 4px 4px 0}
+.btn:disabled,.opt:disabled{opacity:.55;cursor:default}
+.row{display:flex;gap:8px;flex-wrap:wrap}.row>.btn{flex:1;min-width:120px}
+.opts{display:grid;gap:10px;margin:10px 0}
+.opts.two{grid-template-columns:1fr 1fr}
+.opt{display:block;width:100%;min-height:56px;text-align:left;padding:10px 12px;border-radius:12px;border:2px solid var(--line);background:#fff;font-size:16px;line-height:1.45}
+.opt.center{text-align:center}
+.opt.picked{border-color:var(--pri)}
+.opt.ok{border-color:var(--ok);background:var(--okbg)}
+.opt.ng{border-color:var(--ng);background:var(--ngbg)}
+.zh{font-family:"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Noto Sans SC","Microsoft YaHei",sans-serif}
+.zh.big{font-size:34px;line-height:1.25}.zh.mid{font-size:22px}
+.py{display:block;font-size:16px;color:#355;letter-spacing:.02em}
+.ja{display:block;font-size:16px;color:var(--sub)}
+.chk{display:inline-block;font-size:14px;line-height:1.4;padding:1px 6px;border-radius:6px;background:var(--warnbg);color:var(--warn);border:1px solid #f0d58a;white-space:nowrap;vertical-align:middle}
+.kb{display:inline-block;font-size:14px;padding:1px 6px;border-radius:6px;background:var(--pri2);color:var(--pri);border:1px solid #bcd;white-space:nowrap}
+.fb{border-radius:12px;padding:12px;margin:10px 0;font-size:15px}
+.fb.ok{background:var(--okbg);border:1px solid #9fd3b6}.fb.ng{background:var(--ngbg);border:1px solid #efb1ab}
+.fb.info{background:var(--pri2);border:1px solid #bcd}
+.audio{display:inline-flex;align-items:center;justify-content:center;gap:4px;min-width:48px;min-height:48px;padding:6px 12px;border-radius:24px;border:1px solid var(--pri);background:#fff;color:var(--pri);font-size:15px;font-weight:600}
+footer.note{position:fixed;left:0;right:0;bottom:0;background:#fffdf8;border-top:1px solid var(--line);font-size:14px;line-height:1.45;color:#555;padding:6px 10px calc(6px + env(safe-area-inset-bottom));text-align:center;z-index:6}
+#astat{min-height:0;font-size:15px;color:var(--ng)}
+.bar{height:8px;background:#e7e2d6;border-radius:4px;overflow:hidden}.bar>i{display:block;height:100%;background:var(--pri);width:0;transition:width .2s}
+table.t{width:100%;border-collapse:collapse;font-size:15px}table.t td,table.t th{border-bottom:1px solid var(--line);padding:6px 4px;text-align:left;vertical-align:top}
+.tag{display:inline-block;font-size:14px;border-radius:6px;padding:0 6px;background:#eee;color:#444}
+.shake{animation:shake .3s}@keyframes shake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+.center{text-align:center}.mt0{margin-top:0}
+.seg{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}.seg button{flex:1;min-width:90px;min-height:48px;border-radius:10px;border:2px solid var(--line);background:#fff;font-size:16px}
+.seg button[aria-pressed=true]{border-color:var(--pri);background:var(--pri2);color:var(--pri);font-weight:700}
+details{margin:8px 0}summary{cursor:pointer;min-height:44px;display:flex;align-items:center;color:var(--pri);font-weight:600}
+.toast{position:fixed;left:50%;bottom:70px;transform:translateX(-50%);background:#333;color:#fff;padding:8px 14px;border-radius:10px;font-size:14px;z-index:9;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw}
+.toast.on{opacity:.95}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* 答えたあとの大事なボタンを、スマホの画面下に固定して親指で押せるようにする（下の説明欄の上に出る） */
+.stick{position:sticky;bottom:calc(var(--fh,56px) + 6px);z-index:4;box-shadow:0 -4px 14px rgba(0,0,0,.12)}
+.stickbar{position:sticky;bottom:calc(var(--fh,56px));z-index:4;background:linear-gradient(rgba(246,244,239,0),var(--bg) 30%);padding:10px 0 2px;margin:0 -2px}
+.stickbar .btn{margin:4px 0}
+.py.hid{display:none}body.showpy .py.hid{display:block}
+/* 前端共通指摘：G.reveal() で出した「次へ」が固定フッターの下に隠れないように */
+.btn,.fb{scroll-margin-bottom:calc(var(--fh,56px) + 14px);scroll-margin-top:64px}
+
+.field{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0;padding:12px;background:#8bb174;border-radius:18px}
+.hole{position:relative;height:108px;border-radius:50% 50% 14px 14px;background:#4e3b2a;overflow:hidden}
+.mole{position:absolute;left:6%;right:6%;bottom:-110%;height:92%;border:0;border-radius:40px 40px 10px 10px;background:#f5e6c8;transition:bottom .14s ease-out;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px;box-shadow:inset 0 -6px 0 #e0caa0}
+.mole.up{bottom:4%}
+.mole .zh{font-size:26px;line-height:1.1}.mole .py{font-size:15px}
+.mole.hit{background:#cdeccf}.mole.bad{background:#f7c9c4}
+.timebar{height:10px;background:#e7e2d6;border-radius:5px;overflow:hidden}.timebar>i{display:block;height:100%;background:#e08a2c;width:100%}
+.stats{display:flex;justify-content:space-between;font-size:14px;margin:6px 0}
+</style>
+</head>
+<body>
+<header class="top"><a class="home" href="../index.html" aria-label="目次にもどる">← 目次</a><h1>ピンイン・モグラ</h1><span class="hud" id="hud"></span></header>
+<main class="wrap">
+<section class="screen on" id="title">
+  <div class="card"><h2>聞いて、たたけ！</h2><p>先生の声（合成）が読む語を、穴から出てくるモグラの中から見つけてタップ！ 1問5〜7秒。</p>
+  <p class="small">iPhone は消音スイッチをオフに。音が出ないときは「もう一度聞く」を押してください。</p></div>
+  <div class="card"><h3 class="mt0">レベル</h3>
+  <div class="seg" id="lv"><button type="button" data-l="1" aria-pressed="true">① やさしい</button><button type="button" data-l="2" aria-pressed="false">② ふつう</button><button type="button" data-l="3" aria-pressed="false">③ むずかしい</button></div>
+  <p class="small" id="ldesc"></p><button class="btn" id="go" type="button">スタート</button><p class="small" id="best"></p></div>
+</section>
+<section class="screen" id="play">
+  <div class="stats"><span id="qno"></span><span id="combo"></span><span id="pts"></span></div>
+  <div class="timebar"><i id="tbar"></i></div>
+  <div class="field" id="field"></div>
+  <div class="row"><button class="btn ghost" id="replay" type="button">▶ もう一度聞く</button></div>
+  <div id="astat"></div>
+  <div id="hint"></div>
+  <div id="fb"></div>
+  <button class="btn stick" id="next" type="button" style="display:none">次へ</button>
+</section>
+<section class="screen" id="result">
+  <div class="card center"><h2>結果</h2><div id="score"></div></div>
+  <button class="btn" id="toReview" type="button">復習する</button>
+  <button class="btn ghost" id="again" type="button">もう一度</button>
+  <button class="btn ghost" id="toTitle" type="button">タイトルへ</button>
+</section>
+<section class="screen" id="review">
+  <div class="card"><h2>復習：外した語</h2><div id="rlist"></div></div>
+  <button class="btn" id="retryMiss" type="button">外した語だけもう一度</button>
+  <button class="btn ghost" id="toTitle2" type="button">タイトルへ</button>
+</section>
+</main>
+<footer class="note">音声：先生の声をもとに合成</footer>
+<script>
+'use strict';
+/* 共通部品（各ファイルに同じものを埋め込み。外部ライブラリなし） */
+const G = (() => {
+  const GAME = document.documentElement.dataset.game || 'x';
+  const KEY = 'cngame.' + GAME; // 合成版の保存キー
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  function h(tag, props, ...kids) {
+    const e = document.createElement(tag);
+    for (const [k, v] of Object.entries(props || {})) {
+      if (v == null || v === false) continue;
+      if (k === 'class') e.className = v; else if (k === 'text') e.textContent = v; else if (k === 'html') e.innerHTML = v;
+      else if (k === 'style') e.style.cssText = v;
+      else if (k.startsWith('on') && typeof v === 'function') e.addEventListener(k.slice(2), v);
+      else e.setAttribute(k, v === true ? '' : v);
+    }
+    for (const c of kids.flat(9)) { if (c == null || c === false) continue; e.append(c.nodeType ? c : document.createTextNode(String(c))); }
+    return e;
+  }
+  // append(…, null) で「null」と表示されないように（null / false は飛ばす）
+  { const ap = Element.prototype.append; Element.prototype.append = function (...a) { return ap.apply(this, a.filter(x => x != null && x !== false)); }; }
+  let rnd = Math.random;
+  function seeded(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  function shuffle(a, r = rnd) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+  function pick(a, n, r = rnd) { return shuffle(a, r).slice(0, n); }
+  // ---- 保存（localStorage のみ。使えない環境でも遊べる） ----
+  let mem = {};
+  function load() { try { const s = localStorage.getItem(KEY); return s ? JSON.parse(s) : {}; } catch (e) { return mem; } }
+  function save(o) { mem = o; try { localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) { } }
+  // ---- 画面切り替え ----
+  function show(id) { $$('.screen').forEach(s => s.classList.toggle('on', s.id === id)); window.scrollTo(0, 0); }
+  // ---- タイマー（重ねがけ防止：新しい回の前に必ず clearAll） ----
+  const T = new Set();
+  function after(ms, fn) { const id = setTimeout(() => { T.delete(id); fn(); }, ms); T.add(id); return id; }
+  function every(ms, fn) { const id = setInterval(fn, ms); T.add(-id); return id; }
+  function clearAll() { for (const id of T) { if (id < 0) clearInterval(-id); else clearTimeout(id); } T.clear(); }
+  // ---- 音声（1つの Audio を使い回す。失敗は画面内に表示、alert は使わない） ----
+  const au = new Audio(); au.preload = 'auto';
+  let playSeq = 0;
+  function play(url) {
+    const seq = ++playSeq; const st = $('#astat');
+    if (st) st.textContent = '';
+    return new Promise(res => {
+      if (!url) return res(false);
+      try { au.pause(); } catch (e) { }
+      au.onended = () => { if (seq === playSeq) res(true); };
+      au.onerror = () => { if (seq === playSeq) { if (st) st.textContent = '音声を再生できませんでした。通信状況を確認して、もう一度押してください。'; fail(url); res(false); } };
+      au.src = url;
+      const p = au.play();
+      if (p && p.catch) p.catch(err => { if (seq !== playSeq) return; if (err && err.name === 'AbortError') return; if (st) st.textContent = '音声を再生できませんでした（' + (err && err.name === 'NotAllowedError' ? 'もう一度ボタンを押してください' : '通信状況を確認してください') + '）。'; fail(url); res(false); });
+    });
+  }
+  // 再生できなかったことを各ゲームに知らせる（時間制のゲームはタイマーを止めて、文字のヒントを出す）
+  function fail(url) { try { window.dispatchEvent(new CustomEvent('audiofail', { detail: url })); } catch (e) { } }
+  function stopAudio() { playSeq++; try { au.pause(); } catch (e) { } }
+  function audioBtn(url, label = '▶ 聞く') { return h('button', { class: 'audio', type: 'button', 'aria-label': '音声を聞く', onclick: () => play(url) }, label); }
+  // ---- 表示部品 ----
+  const zh = (t, cls = '') => h('span', { class: 'zh ' + cls, lang: 'zh-CN' }, t);
+  const py = t => h('span', { class: 'py', lang: 'zh-Latn-pinyin' }, t);
+  const ja = t => h('span', { class: 'ja' }, t);
+  // 中級・上級用：ピンインは最初は隠しておき、「ピンイン」ボタンで出せる（中国語には必ずピンインが付いている状態にする）
+  const pyh = t => h('span', { class: 'py hid', lang: 'zh-Latn-pinyin' }, t);
+  function pyBtn() { const b = h('button', { class: 'btn inline ghost pybtn', type: 'button', 'aria-pressed': String(document.body.classList.contains('showpy')) }, document.body.classList.contains('showpy') ? 'ピンインを隠す' : 'ピンインを表示'); b.onclick = () => { const on = document.body.classList.toggle('showpy'); $$('.pybtn').forEach(x => { x.textContent = on ? 'ピンインを隠す' : 'ピンインを表示'; x.setAttribute('aria-pressed', String(on)); }); }; return b; }
+  const chk = () => h('span', { class: 'chk' }, '⚠先生確認');
+  const kb = t => h('span', { class: 'kb' }, t);
+  function plain(p) { return p.normalize('NFD').replace(/[\u0300-\u0304\u0306\u0307\u0309-\u036f]/g, '').normalize('NFC'); }
+  let toastT = 0;
+  function toast(m) { let t = $('.toast'); if (!t) { t = h('div', { class: 'toast', role: 'status' }); document.body.append(t); } t.textContent = m; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 1800); }
+  // ---- 連打対策：1問につき1回だけ受け付ける ----
+  function guard() { let used = false; const born = performance.now(); return fn => (...a) => { if (used || performance.now() - born < 300) return; used = true; fn(...a); }; } // 表示直後0.3秒のタップは前の画面の連打とみなして無視
+  function lock(box) { $$('button', box).forEach(b => b.disabled = true); }
+  const today = (d = new Date()) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  // ---- 連打対策：前のタップの時点で見えていなかった要素への 0.35 秒以内のタップは無視（画面が変わった直後の指の2回目） ----
+  let lastTap = -1e9, seenVis = new WeakMap();
+  document.addEventListener('click', e => {
+    if (!e.isTrusted) return;
+    const SEL = 'button,a,[role=button],.opt,.part,.tile,.hole', now = performance.now(), el = e.target.closest(SEL);
+    if (!el) return; // ボタン以外のタップは対象外（全要素を調べないので軽い）
+    if (now - lastTap < 350 && seenVis.get(el) !== true) { e.stopPropagation(); e.preventDefault(); return; }
+    lastTap = now; seenVis = new WeakMap(); for (const x of document.querySelectorAll(SEL)) seenVis.set(x, x.offsetParent !== null || x.getClientRects().length > 0);
+  }, true);
+  // 答えたあと、フィードバックや「次へ」が画面に入るようにスクロール（動きを減らす設定なら一瞬で）
+  const reduce = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function reveal(el, block = 'nearest') { if (!el) return; try { el.scrollIntoView({ block, behavior: reduce() ? 'auto' : 'smooth' }); } catch (e) { el.scrollIntoView(); } } // 同期で呼ぶ（rAF だと直後のタップに間に合わないことがある）
+  // 下の説明欄の高さを CSS 変数 --fh に入れる（説明欄が2行になってもボタンが隠れない）
+  function fh() { const f = document.querySelector('footer.note'); document.documentElement.style.setProperty('--fh', (f ? f.offsetHeight : 0) + 'px'); }
+  addEventListener('resize', fh); document.addEventListener('DOMContentLoaded', fh); setTimeout(fh, 0);
+  // 声調の誤答選択肢に使わない声調（その字の別の正しい読み・変調形）。例：好 hào、和 hè、喝 hè、读 dù、不 bú/bù、都 dū、的 dí/dì
+  const BANT = { 好: [4], 和: [4], 喝: [4], 读: [4], 不: [2, 4], 都: [1], 的: [2, 4], 少: [4], 分: [4], 作: [1], 兴: [1], 打: [2], 八: [2], 个: [3], 语: [4] };
+  const banTone = (hz, k, t) => { const c = [...hz][k]; return !!(BANT[c] && BANT[c].includes(t)); };
+  const test = /[?&]test=1/.test(location.search);
+  return { GAME, $, $$, h, shuffle, pick, seeded, setRand: f => rnd = f, rand: () => rnd(), load, save, show, after, every, clearAll, play, stopAudio, audioBtn, zh, py, ja, chk, kb, plain, toast, guard, lock, today, test, reveal, reduce, pyh, pyBtn, BANT, banTone };
+})();
+
+const WORDS = [
+ {
+  "hanzi": "爱",
+  "pinyin": "ài",
+  "pos": "動",
+  "ja": "愛する、（行い、状態を）好む",
+  "audio": "https://tcll1988.github.io/HSK/audio/20/%E7%88%B1.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "八",
+  "pinyin": "bā",
+  "pos": "数",
+  "ja": "八",
+  "audio": "https://tcll1988.github.io/HSK/audio/06/%E5%85%AB.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "爸爸",
+  "pinyin": "bàba",
+  "pos": "名",
+  "ja": "お父さん",
+  "audio": "https://tcll1988.github.io/HSK/audio/37/%E7%88%B8%E7%88%B8.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "北京",
+  "pinyin": "Běijīng",
+  "pos": "名固",
+  "ja": "北京",
+  "audio": "https://tcll1988.github.io/HSK/audio/18/%E5%8C%97%E4%BA%AC.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "杯子",
+  "pinyin": "bēizi",
+  "pos": "名",
+  "ja": "コップ、さかずき",
+  "audio": "https://tcll1988.github.io/HSK/audio/82/%E6%9D%AF%E5%AD%90.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "本",
+  "pinyin": "běn",
+  "pos": "量",
+  "ja": "…冊（書籍・ノートを数える）",
+  "audio": "https://tcll1988.github.io/HSK/audio/59/%E6%9C%AC.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "不",
+  "pinyin": "bù",
+  "pos": "副",
+  "ja": "いいえ、…しない、…ではない",
+  "audio": "https://tcll1988.github.io/HSK/audio/80/%E4%B8%8D.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "不客气",
+  "pinyin": "búkèqi",
+  "pos": "他",
+  "ja": "どういたしまして",
+  "audio": "https://tcll1988.github.io/HSK/audio/42/%E4%B8%8D%E5%AE%A2%E6%B0%94.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "菜",
+  "pinyin": "cài",
+  "pos": "名",
+  "ja": "料理、おかず",
+  "audio": "https://tcll1988.github.io/HSK/audio/43/%E8%8F%9C.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "茶",
+  "pinyin": "chá",
+  "pos": "名",
+  "ja": "お茶",
+  "audio": "https://tcll1988.github.io/HSK/audio/89/%E8%8C%B6.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "吃",
+  "pinyin": "chī",
+  "pos": "動",
+  "ja": "食べる",
+  "audio": "https://tcll1988.github.io/HSK/audio/62/%E5%90%83.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "出租车",
+  "pinyin": "chūzūchē",
+  "pos": "名",
+  "ja": "タクシー",
+  "audio": "https://tcll1988.github.io/HSK/audio/00/%E5%87%BA%E7%A7%9F%E8%BD%A6.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "大",
+  "pinyin": "dà",
+  "pos": "形",
+  "ja": "大きい、年長である",
+  "audio": "https://tcll1988.github.io/HSK/audio/54/%E5%A4%A7.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "打电话",
+  "pinyin": "dǎdiànhuà",
+  "pos": "動",
+  "ja": "電話をかける",
+  "audio": "https://tcll1988.github.io/HSK/audio/48/%E6%89%93%E7%94%B5%E8%AF%9D.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "的",
+  "pinyin": "de",
+  "pos": "助",
+  "ja": "助詞（連体修飾・所有）",
+  "audio": "https://tcll1988.github.io/HSK/audio/43/%E7%9A%84.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "点",
+  "pinyin": "diǎn",
+  "pos": "量",
+  "ja": "…時",
+  "audio": "https://tcll1988.github.io/HSK/audio/00/%E7%82%B9.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "电脑",
+  "pinyin": "diànnǎo",
+  "pos": "名",
+  "ja": "パソコン",
+  "audio": "https://tcll1988.github.io/HSK/audio/83/%E7%94%B5%E8%84%91.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "电视",
+  "pinyin": "diànshì",
+  "pos": "名",
+  "ja": "テレビ",
+  "audio": "https://tcll1988.github.io/HSK/audio/74/%E7%94%B5%E8%A7%86.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "电影",
+  "pinyin": "diànyǐng",
+  "pos": "名",
+  "ja": "映画",
+  "audio": "https://tcll1988.github.io/HSK/audio/91/%E7%94%B5%E5%BD%B1.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "东西",
+  "pinyin": "dōngxi",
+  "pos": "名",
+  "ja": "品物",
+  "audio": "https://tcll1988.github.io/HSK/audio/64/%E4%B8%9C%E8%A5%BF.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "都",
+  "pinyin": "dōu",
+  "pos": "副",
+  "ja": "みな、すべて",
+  "audio": "https://tcll1988.github.io/HSK/audio/76/%E9%83%BD.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "读",
+  "pinyin": "dú",
+  "pos": "動",
+  "ja": "音読する、（学校で）勉強する",
+  "audio": "https://tcll1988.github.io/HSK/audio/02/%E8%AF%BB.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "对不起",
+  "pinyin": "duìbuqǐ",
+  "pos": "他",
+  "ja": "すみません",
+  "audio": "https://tcll1988.github.io/HSK/audio/88/%E5%AF%B9%E4%B8%8D%E8%B5%B7.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "多",
+  "pinyin": "duō",
+  "pos": "形",
+  "ja": "多い",
+  "audio": "https://tcll1988.github.io/HSK/audio/97/%E5%A4%9A.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "多少",
+  "pinyin": "duōshǎo",
+  "pos": "代",
+  "ja": "いくら（数量を問う）、いくらか（不定の数量）",
+  "audio": "https://tcll1988.github.io/HSK/audio/44/%E5%A4%9A%E5%B0%91.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "二",
+  "pinyin": "èr",
+  "pos": "数",
+  "ja": "二（単独で）",
+  "audio": "https://tcll1988.github.io/HSK/audio/63/%E4%BA%8C.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "儿子",
+  "pinyin": "érzi",
+  "pos": "名",
+  "ja": "息子",
+  "audio": "https://tcll1988.github.io/HSK/audio/86/%E5%84%BF%E5%AD%90.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "饭馆",
+  "pinyin": "fànguǎn",
+  "pos": "名",
+  "ja": "レストラン",
+  "audio": "https://tcll1988.github.io/HSK/audio/26/%E9%A5%AD%E9%A6%86.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "飞机",
+  "pinyin": "fēijī",
+  "pos": "名",
+  "ja": "飛行機",
+  "audio": "https://tcll1988.github.io/HSK/audio/45/%E9%A3%9E%E6%9C%BA.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "分钟",
+  "pinyin": "fēnzhōng",
+  "pos": "名",
+  "ja": "…分間",
+  "audio": "https://tcll1988.github.io/HSK/audio/70/%E5%88%86%E9%92%9F.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "高兴",
+  "pinyin": "gāoxìng",
+  "pos": "形",
+  "ja": "うれしい",
+  "audio": "https://tcll1988.github.io/HSK/audio/85/%E9%AB%98%E5%85%B4.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "个",
+  "pinyin": "gè",
+  "pos": "量",
+  "ja": "…個（広く色々な名詞に用いる）",
+  "audio": "https://tcll1988.github.io/HSK/audio/21/%E4%B8%AA.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "工作",
+  "pinyin": "gōngzuò",
+  "pos": "動",
+  "ja": "仕事をする",
+  "audio": "https://tcll1988.github.io/HSK/audio/28/%E5%B7%A5%E4%BD%9C.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "狗",
+  "pinyin": "gǒu",
+  "pos": "名",
+  "ja": "犬",
+  "audio": "https://tcll1988.github.io/HSK/audio/22/%E7%8B%97.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "汉语",
+  "pinyin": "Hànyǔ",
+  "pos": "名",
+  "ja": "中国語",
+  "audio": "https://tcll1988.github.io/HSK/audio/75/%E6%B1%89%E8%AF%AD.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "好",
+  "pinyin": "hǎo",
+  "pos": "形",
+  "ja": "よい、申し分ない",
+  "audio": "https://tcll1988.github.io/HSK/audio/52/%E5%A5%BD.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "和",
+  "pinyin": "hé",
+  "pos": "介",
+  "ja": "…と",
+  "audio": "https://tcll1988.github.io/HSK/audio/83/%E5%92%8C.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "喝",
+  "pinyin": "hē",
+  "pos": "動",
+  "ja": "飲む",
+  "audio": "https://tcll1988.github.io/HSK/audio/00/%E5%96%9D.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "很",
+  "pinyin": "hěn",
+  "pos": "副",
+  "ja": "たいへん、とても",
+  "audio": "https://tcll1988.github.io/HSK/audio/83/%E5%BE%88.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "回",
+  "pinyin": "huí",
+  "pos": "量",
+  "ja": "…回",
+  "audio": "https://tcll1988.github.io/HSK/audio/45/%E5%9B%9E.mp3?v=20261020-voice-v2"
+ }
+];
+const WORD_SYL = {"爱": [["ài", 4]], "八": [["bā", 1]], "爸爸": [["bà", 4], ["ba", 0]], "北京": [["Běi", 3], ["jīng", 1]], "杯子": [["bēi", 1], ["zi", 0]], "本": [["běn", 3]], "不": [["bù", 4]], "不客气": [["bú", 2], ["kè", 4], ["qi", 0]], "菜": [["cài", 4]], "茶": [["chá", 2]], "吃": [["chī", 1]], "出租车": [["chū", 1], ["zū", 1], ["chē", 1]], "大": [["dà", 4]], "打电话": [["dǎ", 3], ["diàn", 4], ["huà", 4]], "的": [["de", 0]], "点": [["diǎn", 3]], "电脑": [["diàn", 4], ["nǎo", 3]], "电视": [["diàn", 4], ["shì", 4]], "电影": [["diàn", 4], ["yǐng", 3]], "东西": [["dōng", 1], ["xi", 0]], "都": [["dōu", 1]], "读": [["dú", 2]], "对不起": [["duì", 4], ["bu", 0], ["qǐ", 3]], "多": [["duō", 1]], "多少": [["duō", 1], ["shǎo", 3]], "二": [["èr", 4]], "儿子": [["ér", 2], ["zi", 0]], "饭馆": [["fàn", 4], ["guǎn", 3]], "飞机": [["fēi", 1], ["jī", 1]], "分钟": [["fēn", 1], ["zhōng", 1]], "高兴": [["gāo", 1], ["xìng", 4]], "个": [["gè", 4]], "工作": [["gōng", 1], ["zuò", 4]], "狗": [["gǒu", 3]], "汉语": [["Hàn", 4], ["yǔ", 3]], "好": [["hǎo", 3]], "和": [["hé", 2]], "喝": [["hē", 1]], "很": [["hěn", 3]], "回": [["huí", 2]]};
+const CFG = { 1: { holes: 3, sec: 7, py: true, hz: true }, 2: { holes: 6, sec: 6, py: true, hz: true }, 3: { holes: 6, sec: 5, py: false, hz: true } };
+const LD = { 1: '3つの穴、漢字とピンイン、1問7秒。', 2: '6つの穴、漢字とピンイン、1問6秒。', 3: '6つの穴、漢字だけ、1問5秒。音の似た語が混ざります。' };
+const tp = w => WORD_SYL[w.hanzi].map(s => s[1]).join('');
+let tShow = 0, paused = false, lv = 1, qs = [], qi = 0, log = [], score = 0, combo = 0, maxCombo = 0, deadline = 0, qStart = 0, answered = false, distract = [];
+const st = G.load(); st.best = st.best || {};
+function setLv(n) { lv = n; G.$$('#lv button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.l === n))); G.$('#ldesc').textContent = LD[n]; G.$('#best').textContent = st.best[n] ? `ベストスコア：${st.best[n]}` : ''; }
+G.$$('#lv button').forEach(b => b.onclick = () => setLv(+b.dataset.l));
+function similar(t) { // ③は音の似た語を優先
+  const others = WORDS.filter(w => w !== t);
+  if (lv < 3) return G.shuffle(others);
+  const sc = w => (G.plain(w.pinyin)[0].toLowerCase() === G.plain(t.pinyin)[0].toLowerCase() ? 2 : 0) + (tp(w) === tp(t) ? 2 : 0) + (w.hanzi.length === t.hanzi.length ? 1 : 0) + G.rand();
+  return others.slice().sort((a, b) => sc(b) - sc(a));
+}
+function start(list) { G.clearAll(); G.stopAudio(); qs = list || G.pick(WORDS, 10); qi = 0; log = []; score = 0; combo = 0; maxCombo = 0; G.show('play'); ask(); }
+function ask() {
+  G.clearAll(); answered = false;
+  const t = qs[qi], c = CFG[lv];
+  distract = similar(t).slice(0, lv < 3 ? 8 : 5);
+  G.$('#qno').textContent = `第${qi + 1}問 / ${qs.length}`; G.$('#pts').textContent = `${score} 点`; G.$('#combo').textContent = combo > 1 ? `🔥${combo}コンボ` : '';
+  G.$('#fb').innerHTML = ''; G.$('#hint').innerHTML = ''; G.$('#next').style.display = 'none'; G.$('#hud').textContent = '';
+  const f = G.$('#field'); f.innerHTML = ''; f.style.gridTemplateColumns = 'repeat(3,1fr)';
+  for (let i = 0; i < c.holes; i++) { const m = G.h('button', { class: 'mole', type: 'button', 'aria-label': 'モグラ' }); m.onclick = () => whack(m); f.append(G.h('div', { class: 'hole' }, m)); }
+  G.play(t.audio);
+  qStart = performance.now() + 500; deadline = qStart + c.sec * 1000;
+  let lastSpawn = 0, targetShown = 0, spawns = 0; const firstT = Math.floor(G.rand() * (c.holes > 3 ? 4 : 3)); // 正解が初めて出るのは、はずれが0〜3匹（穴3つなら0〜2匹）出たあと。最初の1匹が正解になるのは偶然と同じくらい（約1/4〜1/3）で、「最初を叩く」「最初は叩かない」のどちらも当てにならない
+  tShow = 0; paused = false;
+  G.every(100, () => {
+    if (answered || paused) return;
+    const now = performance.now(), left = Math.max(0, deadline - now);
+    G.$('#tbar').style.width = (100 * left / (c.sec * 1000)) + '%'; G.$('#hud').textContent = (left / 1000).toFixed(1) + '秒';
+    if (left <= 0) return timeout();
+    G.$$('.mole').forEach(m => { if (m.classList.contains('up') && now > +m.dataset.until) { m.classList.remove('up'); m.dataset.w = ''; m.setAttribute('aria-label', 'モグラ'); } });
+    if (now < qStart || now - lastSpawn < 450) return;
+    const empty = G.$$('.mole').filter(m => !m.classList.contains('up'));
+    if (!empty.length) return;
+    const targetUp = G.$$('.mole.up').some(m => m.dataset.w === t.hanzi);
+    const wantT = !targetUp && spawns >= firstT && (targetShown === 0 || now - lastT > 1600 || G.rand() < 0.35);
+    const used = new Set(G.$$('.mole.up').map(m => m.dataset.w));
+    const w = wantT ? t : distract.find(d => !used.has(d.hanzi) && G.rand() < 0.6) || distract.find(d => !used.has(d.hanzi));
+    if (!w) return;
+    const m = empty[Math.floor(G.rand() * empty.length)];
+    m.innerHTML = ''; if (c.hz) m.append(G.zh(w.hanzi)); if (c.py) m.append(G.py(w.pinyin));
+    m.dataset.w = w.hanzi; m.setAttribute('aria-label', w.hanzi); m.dataset.until = now + 1300 + G.rand() * 600; m.classList.add('up');
+    if (w === t) { targetShown++; lastT = now; if (!tShow) tShow = now; }
+    spawns++; lastSpawn = now;
+  });
+  var lastT = 0;
+  if (G.test) window.__t = { answer: t.hanzi };
+}
+function lockField() { G.$$('.mole').forEach(m => m.disabled = true); }
+function whack(m) {
+  if (answered || !m.classList.contains('up') || !m.dataset.w) return;
+  answered = true; G.clearAll(); lockField();
+  const t = qs[qi], ok = m.dataset.w === t.hanzi, rt = Math.round(performance.now() - (tShow || qStart)); // 反応＝正解のモグラが出てから
+  m.classList.add(ok ? 'hit' : 'bad');
+  if (ok) { combo++; maxCombo = Math.max(maxCombo, combo); const left = Math.max(0, deadline - performance.now()); score += 100 + Math.round(left / 50) + (combo > 1 ? 20 * (combo - 1) : 0); }
+  else combo = 0;
+  log.push({ w: t, ok, rt: ok ? rt : null, got: m.dataset.w });
+  feedback(ok, ok ? `命中！ 反応 ${(rt / 1000).toFixed(1)}秒` : `ざんねん！ それは「${m.dataset.w}」`);
+}
+function timeout() { if (answered) return; answered = true; G.clearAll(); lockField(); combo = 0; log.push({ w: qs[qi], ok: false, rt: null, got: '時間切れ' }); feedback(false, '時間切れ！'); }
+function feedback(ok, msg) {
+  const t = qs[qi]; G.$('#pts').textContent = `${score} 点`; G.$('#combo').textContent = combo > 1 ? `🔥${combo}コンボ` : '';
+  G.$('#fb').append(G.h('div', { class: 'fb ' + (ok ? 'ok' : 'ng') }, G.h('b', {}, msg), G.h('p', {}, '正解：', G.zh(t.hanzi, 'mid'), ' ', G.h('span', { lang: 'zh-Latn-pinyin' }, t.pinyin), '　' + t.ja), G.audioBtn(t.audio)));
+  if (!ok) G.play(t.audio);
+  const nx = G.$('#next'); nx.textContent = qi + 1 < qs.length ? '次へ' : '結果を見る'; nx.style.display = 'block'; nx.disabled = false; G.reveal(G.$('#fb'));
+}
+G.$('#replay').onclick = () => { if (!qs[qi]) return; const was = paused; G.play(qs[qi].audio).then(ok => { if (ok && was && paused && !answered) resume(); }); if (was && !answered) resume(); };
+// 音声が出なかったとき：時間を止め、ピンインを文字で出す（時間切れで負けないように）
+addEventListener('audiofail', () => {
+  if (!G.$('#play').classList.contains('on') || answered || paused || !qs[qi]) return;
+  paused = true; G.$$('.mole').forEach(m => { m.classList.remove('up'); m.dataset.w = ''; });
+  const hb = G.$('#hint'); hb.innerHTML = ''; hb.append(G.h('div', { class: 'fb', style: 'background:var(--warnbg)' }, G.h('b', {}, '⏸ 時間を止めました。'), G.h('p', {}, '音が出ないときは、このピンインの語を探してたたこう：'), G.h('p', { lang: 'zh-Latn-pinyin', style: 'font-size:22px;font-weight:700;margin:4px 0' }, qs[qi].pinyin), G.h('button', { class: 'btn', type: 'button', onclick: resume }, '再開する')));
+  G.reveal(hb);
+});
+function resume() { if (!paused) return; paused = false; G.$('#hint').innerHTML = ''; const c = CFG[lv]; qStart = performance.now() + 300; deadline = qStart + c.sec * 1000; }
+G.$('#next').onclick = () => { const nx = G.$('#next'); if (nx.disabled) return; nx.disabled = true; qi++; if (qi < qs.length) ask(); else finish(); };
+function finish() {
+  G.clearAll(); G.$('#hud').textContent = '';
+  const hit = log.filter(l => l.ok), avg = hit.length ? (hit.reduce((s, l) => s + l.rt, 0) / hit.length / 1000).toFixed(1) : '—';
+  const prev = st.best[lv] || 0; if (score > prev) st.best[lv] = score; G.save(st);
+  G.$('#score').innerHTML = ''; G.$('#score').append(G.h('p', { style: 'font-size:30px;font-weight:700;margin:0' }, `${hit.length} / ${log.length} 命中`), G.h('p', {}, `スコア ${score} 点${score > prev ? '（ベスト更新！）' : ''}`), G.h('p', { class: 'small' }, `最大コンボ ${maxCombo}・平均反応 ${avg}秒`));
+  G.show('result');
+}
+function renderReview() {
+  const box = G.$('#rlist'); box.innerHTML = ''; const miss = log.filter(l => !l.ok);
+  if (!miss.length) box.append(G.h('p', {}, '全部命中！'));
+  miss.forEach(l => box.append(G.h('div', { class: 'card' }, G.zh(l.w.hanzi, 'mid'), ' ', G.h('b', { lang: 'zh-Latn-pinyin' }, l.w.pinyin), G.ja(l.w.ja + ' ／ あなた：' + l.got), G.audioBtn(l.w.audio))));
+  G.$('#retryMiss').style.display = miss.length ? 'block' : 'none';
+}
+G.$('#go').onclick = () => start(); G.$('#again').onclick = () => start();
+G.$('#toReview').onclick = () => { renderReview(); G.show('review'); };
+G.$('#retryMiss').onclick = () => start(log.filter(l => !l.ok).map(l => l.w));
+G.$('#toTitle').onclick = G.$('#toTitle2').onclick = () => { G.clearAll(); G.stopAudio(); setLv(lv); G.$('#hud').textContent = ''; G.show('title'); };
+setLv(1);
+if (G.test) window.__timeLeft = () => Math.max(0, deadline - performance.now());
+</script>
+</body>
+</html>

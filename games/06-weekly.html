@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<!--
+【06 今週のチャレンジ（週替わり10問）】 設計メモ（合成版：Grok Bot 版を土台に、各AI版の検証済みの長所を統合）
+■学習目標：毎週、40語から同じ10問に全員が挑戦。聞く→意味、漢字→正しいピンイン（声調）、聞く→漢字 の3種類で、
+  日本の学生が苦手な「音」と「声調」を中心に確認する（漢字→意味は日本人には簡単すぎるので入れない）。
+■一局：10問・約3分。1回目の記録が「今週の公式記録」、2回目以降は練習（記録は別）。
+■画面：タイトル（今週の番号・期限・自分の記録）→ 問題（経過時間を表示）→ 答え合わせ（各問すぐ正誤）→ 結果（点数・時間・提出コード）
+  → まちがい復習。画面下に「先生用：コード集計」（コードを貼ると順位表を作る。すべて端末内で計算、送信なし）。
+■素材：sample_words.json の40語・音声をそのまま。問題はISO週番号から決まるので、同じ週なら全員同じ問題・同じ選択肢順。
+■難度：問題の種類は固定の割合（聞く→意味4・ピンイン3・聞く→漢字3）。ピンインの誤答は声調だけを変えたもの。
+■提出コード：名前・週・点数・秒数・簡単なチェック文字。⚠その気になれば偽造できるので、成績には使わない前提（画面にも明記）。
+■スマホ・iPhone：音声は問題を開いたときに自動再生しない（iPhoneで鳴らないことがある）→「▶聞く」ボタンを大きく。
+■効果の確かめ方：週ごとの点数・時間の推移を保存。先生は集計表で「どの問題でまちがいが多いか」も見られる（コードに誤答番号を含める）。
+■リスク：経過時間を競うと急いで当てずっぽうになりやすい→順位は点数優先、時間は同点の時だけ。
+■合成版（2026-10-26）：Claude Code 06 の「自分の週ごとの記録の棒グラフ」を移植（最近8週）。
+■前端レビュー後：問題は週ごとに同じ、選択肢の並びは名前ごとに変わる。聞き取り問題は自動で再生。先生の集計は同じ名前・同じ週の2回目以降を数えない。
+■成品確認後：声調の誤答に、その字の別の正しい読み・変調形（好 hào、和 hè、喝 hè、读 dù、不 bú/bù、都 dū、的 dí/dì など：common.js の BANT）を使わない。
+-->
+<html lang="ja" data-game="06-weekly">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>今週のチャレンジ｜06</title>
+<style>:root{--bg:#f6f4ef;--card:#fff;--ink:#222;--sub:#666;--line:#d9d4c7;--pri:#2f5d8a;--pri2:#e8f0f8;--ok:#1f7a4d;--okbg:#e5f5ec;--ng:#b3261e;--ngbg:#fde9e7;--warn:#8a5a00;--warnbg:#fff4d6;--r:14px}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Noto Sans CJK JP",Meiryo,sans-serif;padding:0 0 calc(var(--fh,56px) + 12px)}
+.wrap{max-width:560px;margin:0 auto;padding:12px 14px}
+header.top{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--pri);color:#fff;position:sticky;top:0;z-index:5}
+header.top a.home{display:inline-flex;align-items:center;min-height:44px;min-width:44px;padding:0 10px;border:1px solid rgba(255,255,255,.65);border-radius:10px;color:#fff;text-decoration:none;font-size:14px;white-space:nowrap}
+header.top h1{font-size:17px;margin:0;flex:1;line-height:1.3}
+header.top .hud{font-size:14px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.screen{display:none}.screen.on{display:block;animation:fade .18s ease}
+@keyframes fade{from{opacity:.3}to{opacity:1}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin:10px 0}
+h2{font-size:19px;margin:6px 0 8px}h3{font-size:16px;margin:12px 0 6px}
+p{margin:6px 0}.sub{color:var(--sub);font-size:15px}.small{font-size:14px;color:#555}
+button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation}
+.btn{display:block;width:100%;min-height:52px;margin:8px 0;padding:10px 14px;border-radius:12px;border:1px solid var(--pri);background:var(--pri);color:#fff;font-size:17px;font-weight:600}
+.btn.ghost{background:#fff;color:var(--pri)}
+.btn.inline{display:inline-block;width:auto;min-width:44px;min-height:44px;padding:6px 14px;font-size:15px;margin:4px 4px 4px 0}
+.btn:disabled,.opt:disabled{opacity:.55;cursor:default}
+.row{display:flex;gap:8px;flex-wrap:wrap}.row>.btn{flex:1;min-width:120px}
+.opts{display:grid;gap:10px;margin:10px 0}
+.opts.two{grid-template-columns:1fr 1fr}
+.opt{display:block;width:100%;min-height:56px;text-align:left;padding:10px 12px;border-radius:12px;border:2px solid var(--line);background:#fff;font-size:16px;line-height:1.45}
+.opt.center{text-align:center}
+.opt.picked{border-color:var(--pri)}
+.opt.ok{border-color:var(--ok);background:var(--okbg)}
+.opt.ng{border-color:var(--ng);background:var(--ngbg)}
+.zh{font-family:"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Noto Sans SC","Microsoft YaHei",sans-serif}
+.zh.big{font-size:34px;line-height:1.25}.zh.mid{font-size:22px}
+.py{display:block;font-size:16px;color:#355;letter-spacing:.02em}
+.ja{display:block;font-size:16px;color:var(--sub)}
+.chk{display:inline-block;font-size:14px;line-height:1.4;padding:1px 6px;border-radius:6px;background:var(--warnbg);color:var(--warn);border:1px solid #f0d58a;white-space:nowrap;vertical-align:middle}
+.kb{display:inline-block;font-size:14px;padding:1px 6px;border-radius:6px;background:var(--pri2);color:var(--pri);border:1px solid #bcd;white-space:nowrap}
+.fb{border-radius:12px;padding:12px;margin:10px 0;font-size:15px}
+.fb.ok{background:var(--okbg);border:1px solid #9fd3b6}.fb.ng{background:var(--ngbg);border:1px solid #efb1ab}
+.fb.info{background:var(--pri2);border:1px solid #bcd}
+.audio{display:inline-flex;align-items:center;justify-content:center;gap:4px;min-width:48px;min-height:48px;padding:6px 12px;border-radius:24px;border:1px solid var(--pri);background:#fff;color:var(--pri);font-size:15px;font-weight:600}
+footer.note{position:fixed;left:0;right:0;bottom:0;background:#fffdf8;border-top:1px solid var(--line);font-size:14px;line-height:1.45;color:#555;padding:6px 10px calc(6px + env(safe-area-inset-bottom));text-align:center;z-index:6}
+#astat{min-height:0;font-size:15px;color:var(--ng)}
+.bar{height:8px;background:#e7e2d6;border-radius:4px;overflow:hidden}.bar>i{display:block;height:100%;background:var(--pri);width:0;transition:width .2s}
+table.t{width:100%;border-collapse:collapse;font-size:15px}table.t td,table.t th{border-bottom:1px solid var(--line);padding:6px 4px;text-align:left;vertical-align:top}
+.tag{display:inline-block;font-size:14px;border-radius:6px;padding:0 6px;background:#eee;color:#444}
+.shake{animation:shake .3s}@keyframes shake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+.center{text-align:center}.mt0{margin-top:0}
+.seg{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}.seg button{flex:1;min-width:90px;min-height:48px;border-radius:10px;border:2px solid var(--line);background:#fff;font-size:16px}
+.seg button[aria-pressed=true]{border-color:var(--pri);background:var(--pri2);color:var(--pri);font-weight:700}
+details{margin:8px 0}summary{cursor:pointer;min-height:44px;display:flex;align-items:center;color:var(--pri);font-weight:600}
+.toast{position:fixed;left:50%;bottom:70px;transform:translateX(-50%);background:#333;color:#fff;padding:8px 14px;border-radius:10px;font-size:14px;z-index:9;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw}
+.toast.on{opacity:.95}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* 答えたあとの大事なボタンを、スマホの画面下に固定して親指で押せるようにする（下の説明欄の上に出る） */
+.stick{position:sticky;bottom:calc(var(--fh,56px) + 6px);z-index:4;box-shadow:0 -4px 14px rgba(0,0,0,.12)}
+.stickbar{position:sticky;bottom:calc(var(--fh,56px));z-index:4;background:linear-gradient(rgba(246,244,239,0),var(--bg) 30%);padding:10px 0 2px;margin:0 -2px}
+.stickbar .btn{margin:4px 0}
+.py.hid{display:none}body.showpy .py.hid{display:block}
+/* 前端共通指摘：G.reveal() で出した「次へ」が固定フッターの下に隠れないように */
+.btn,.fb{scroll-margin-bottom:calc(var(--fh,56px) + 14px);scroll-margin-top:64px}
+
+.code{font-family:ui-monospace,monospace;font-size:18px;background:#fff;border:2px dashed #8aa;border-radius:10px;padding:10px;word-break:break-all;user-select:all}
+table{width:100%;border-collapse:collapse;font-size:14px}td,th{border-bottom:1px solid #ddd;padding:6px 4px;text-align:left}
+textarea{width:100%;min-height:120px;font-size:16px;border-radius:10px;padding:8px}
+input[type=text]{width:100%;font-size:16px;padding:12px;border-radius:10px;border:1px solid #bbb}
+.hbars{display:flex;align-items:flex-end;gap:6px;min-height:120px;margin-top:8px;padding-top:4px;border-bottom:1px solid var(--line)}
+.hb{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;font-size:14px;max-width:56px}
+.hb i{display:block;width:70%;background:#9db8d3;border-radius:4px 4px 0 0}.hb.now i{background:var(--pri)}
+.hb .hv{font-weight:700}.hb .hk{font-size:14px;color:#555;white-space:nowrap}
+</style>
+</head>
+<body>
+<header class="top"><a class="home" href="../index.html" aria-label="目次にもどる">← 目次</a><h1>今週のチャレンジ</h1><span class="hud" id="hud"></span></header>
+<main class="wrap">
+<section class="screen on" id="title">
+  <div class="card"><h2 id="wk"></h2><p id="wkdesc"></p>
+  <label class="small" for="nm">ニックネーム（コードに入ります。本名でなくてOK）</label><input type="text" id="nm" maxlength="12" autocomplete="off">
+  <button class="btn" id="go" type="button">挑戦する</button><div id="mine"></div></div>
+  <details class="card"><summary>先生用：コード集計</summary>
+  <p class="small">学生から届いたコードを1行に1つずつ貼り付けてください。計算はこの端末の中だけで行い、どこにも送信しません。</p>
+  <textarea id="codes" aria-label="提出コード"></textarea><button class="btn ghost" id="tally" type="button">集計する</button><div id="tout"></div></details>
+</section>
+<section class="screen" id="play">
+  <div class="bar"><i id="bar"></i></div>
+  <div class="card center" id="qcard"></div>
+  <div class="opts" id="opts"></div>
+  <div id="astat"></div><div id="fb"></div>
+  <button class="btn stick" id="next" type="button" style="display:none">次へ</button>
+</section>
+<section class="screen" id="result">
+  <div class="card center"><h2>結果</h2><div id="score"></div></div>
+  <div class="card"><h3 class="mt0">提出コード</h3><div class="code" id="code"></div>
+  <button class="btn ghost" id="copy" type="button">コードをコピー</button>
+  <p class="small">⚠このコードは、その気になれば偽造できます。成績ではなく「参加の目安」として使ってください。</p></div>
+  <button class="btn" id="toReview" type="button">まちがいを復習</button>
+  <button class="btn ghost" id="toTitle" type="button">タイトルへ</button>
+</section>
+<section class="screen" id="review">
+  <div class="card"><h2>復習</h2><div id="rlist"></div></div>
+  <button class="btn ghost" id="toTitle2" type="button">タイトルへ</button>
+</section>
+</main>
+<footer class="note">音声：先生の声をもとに合成</footer>
+<script>
+'use strict';
+/* 共通部品（各ファイルに同じものを埋め込み。外部ライブラリなし） */
+const G = (() => {
+  const GAME = document.documentElement.dataset.game || 'x';
+  const KEY = 'cngame.' + GAME; // 合成版の保存キー
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  function h(tag, props, ...kids) {
+    const e = document.createElement(tag);
+    for (const [k, v] of Object.entries(props || {})) {
+      if (v == null || v === false) continue;
+      if (k === 'class') e.className = v; else if (k === 'text') e.textContent = v; else if (k === 'html') e.innerHTML = v;
+      else if (k === 'style') e.style.cssText = v;
+      else if (k.startsWith('on') && typeof v === 'function') e.addEventListener(k.slice(2), v);
+      else e.setAttribute(k, v === true ? '' : v);
+    }
+    for (const c of kids.flat(9)) { if (c == null || c === false) continue; e.append(c.nodeType ? c : document.createTextNode(String(c))); }
+    return e;
+  }
+  // append(…, null) で「null」と表示されないように（null / false は飛ばす）
+  { const ap = Element.prototype.append; Element.prototype.append = function (...a) { return ap.apply(this, a.filter(x => x != null && x !== false)); }; }
+  let rnd = Math.random;
+  function seeded(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  function shuffle(a, r = rnd) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+  function pick(a, n, r = rnd) { return shuffle(a, r).slice(0, n); }
+  // ---- 保存（localStorage のみ。使えない環境でも遊べる） ----
+  let mem = {};
+  function load() { try { const s = localStorage.getItem(KEY); return s ? JSON.parse(s) : {}; } catch (e) { return mem; } }
+  function save(o) { mem = o; try { localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) { } }
+  // ---- 画面切り替え ----
+  function show(id) { $$('.screen').forEach(s => s.classList.toggle('on', s.id === id)); window.scrollTo(0, 0); }
+  // ---- タイマー（重ねがけ防止：新しい回の前に必ず clearAll） ----
+  const T = new Set();
+  function after(ms, fn) { const id = setTimeout(() => { T.delete(id); fn(); }, ms); T.add(id); return id; }
+  function every(ms, fn) { const id = setInterval(fn, ms); T.add(-id); return id; }
+  function clearAll() { for (const id of T) { if (id < 0) clearInterval(-id); else clearTimeout(id); } T.clear(); }
+  // ---- 音声（1つの Audio を使い回す。失敗は画面内に表示、alert は使わない） ----
+  const au = new Audio(); au.preload = 'auto';
+  let playSeq = 0;
+  function play(url) {
+    const seq = ++playSeq; const st = $('#astat');
+    if (st) st.textContent = '';
+    return new Promise(res => {
+      if (!url) return res(false);
+      try { au.pause(); } catch (e) { }
+      au.onended = () => { if (seq === playSeq) res(true); };
+      au.onerror = () => { if (seq === playSeq) { if (st) st.textContent = '音声を再生できませんでした。通信状況を確認して、もう一度押してください。'; fail(url); res(false); } };
+      au.src = url;
+      const p = au.play();
+      if (p && p.catch) p.catch(err => { if (seq !== playSeq) return; if (err && err.name === 'AbortError') return; if (st) st.textContent = '音声を再生できませんでした（' + (err && err.name === 'NotAllowedError' ? 'もう一度ボタンを押してください' : '通信状況を確認してください') + '）。'; fail(url); res(false); });
+    });
+  }
+  // 再生できなかったことを各ゲームに知らせる（時間制のゲームはタイマーを止めて、文字のヒントを出す）
+  function fail(url) { try { window.dispatchEvent(new CustomEvent('audiofail', { detail: url })); } catch (e) { } }
+  function stopAudio() { playSeq++; try { au.pause(); } catch (e) { } }
+  function audioBtn(url, label = '▶ 聞く') { return h('button', { class: 'audio', type: 'button', 'aria-label': '音声を聞く', onclick: () => play(url) }, label); }
+  // ---- 表示部品 ----
+  const zh = (t, cls = '') => h('span', { class: 'zh ' + cls, lang: 'zh-CN' }, t);
+  const py = t => h('span', { class: 'py', lang: 'zh-Latn-pinyin' }, t);
+  const ja = t => h('span', { class: 'ja' }, t);
+  // 中級・上級用：ピンインは最初は隠しておき、「ピンイン」ボタンで出せる（中国語には必ずピンインが付いている状態にする）
+  const pyh = t => h('span', { class: 'py hid', lang: 'zh-Latn-pinyin' }, t);
+  function pyBtn() { const b = h('button', { class: 'btn inline ghost pybtn', type: 'button', 'aria-pressed': String(document.body.classList.contains('showpy')) }, document.body.classList.contains('showpy') ? 'ピンインを隠す' : 'ピンインを表示'); b.onclick = () => { const on = document.body.classList.toggle('showpy'); $$('.pybtn').forEach(x => { x.textContent = on ? 'ピンインを隠す' : 'ピンインを表示'; x.setAttribute('aria-pressed', String(on)); }); }; return b; }
+  const chk = () => h('span', { class: 'chk' }, '⚠先生確認');
+  const kb = t => h('span', { class: 'kb' }, t);
+  function plain(p) { return p.normalize('NFD').replace(/[\u0300-\u0304\u0306\u0307\u0309-\u036f]/g, '').normalize('NFC'); }
+  let toastT = 0;
+  function toast(m) { let t = $('.toast'); if (!t) { t = h('div', { class: 'toast', role: 'status' }); document.body.append(t); } t.textContent = m; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 1800); }
+  // ---- 連打対策：1問につき1回だけ受け付ける ----
+  function guard() { let used = false; const born = performance.now(); return fn => (...a) => { if (used || performance.now() - born < 300) return; used = true; fn(...a); }; } // 表示直後0.3秒のタップは前の画面の連打とみなして無視
+  function lock(box) { $$('button', box).forEach(b => b.disabled = true); }
+  const today = (d = new Date()) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  // ---- 連打対策：前のタップの時点で見えていなかった要素への 0.35 秒以内のタップは無視（画面が変わった直後の指の2回目） ----
+  let lastTap = -1e9, seenVis = new WeakMap();
+  document.addEventListener('click', e => {
+    if (!e.isTrusted) return;
+    const SEL = 'button,a,[role=button],.opt,.part,.tile,.hole', now = performance.now(), el = e.target.closest(SEL);
+    if (!el) return; // ボタン以外のタップは対象外（全要素を調べないので軽い）
+    if (now - lastTap < 350 && seenVis.get(el) !== true) { e.stopPropagation(); e.preventDefault(); return; }
+    lastTap = now; seenVis = new WeakMap(); for (const x of document.querySelectorAll(SEL)) seenVis.set(x, x.offsetParent !== null || x.getClientRects().length > 0);
+  }, true);
+  // 答えたあと、フィードバックや「次へ」が画面に入るようにスクロール（動きを減らす設定なら一瞬で）
+  const reduce = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function reveal(el, block = 'nearest') { if (!el) return; try { el.scrollIntoView({ block, behavior: reduce() ? 'auto' : 'smooth' }); } catch (e) { el.scrollIntoView(); } } // 同期で呼ぶ（rAF だと直後のタップに間に合わないことがある）
+  // 下の説明欄の高さを CSS 変数 --fh に入れる（説明欄が2行になってもボタンが隠れない）
+  function fh() { const f = document.querySelector('footer.note'); document.documentElement.style.setProperty('--fh', (f ? f.offsetHeight : 0) + 'px'); }
+  addEventListener('resize', fh); document.addEventListener('DOMContentLoaded', fh); setTimeout(fh, 0);
+  // 声調の誤答選択肢に使わない声調（その字の別の正しい読み・変調形）。例：好 hào、和 hè、喝 hè、读 dù、不 bú/bù、都 dū、的 dí/dì
+  const BANT = { 好: [4], 和: [4], 喝: [4], 读: [4], 不: [2, 4], 都: [1], 的: [2, 4], 少: [4], 分: [4], 作: [1], 兴: [1], 打: [2], 八: [2], 个: [3], 语: [4] };
+  const banTone = (hz, k, t) => { const c = [...hz][k]; return !!(BANT[c] && BANT[c].includes(t)); };
+  const test = /[?&]test=1/.test(location.search);
+  return { GAME, $, $$, h, shuffle, pick, seeded, setRand: f => rnd = f, rand: () => rnd(), load, save, show, after, every, clearAll, play, stopAudio, audioBtn, zh, py, ja, chk, kb, plain, toast, guard, lock, today, test, reveal, reduce, pyh, pyBtn, BANT, banTone };
+})();
+
+const WORDS = [
+ {
+  "hanzi": "爱",
+  "pinyin": "ài",
+  "pos": "動",
+  "ja": "愛する、（行い、状態を）好む",
+  "audio": "https://tcll1988.github.io/HSK/audio/20/%E7%88%B1.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "八",
+  "pinyin": "bā",
+  "pos": "数",
+  "ja": "八",
+  "audio": "https://tcll1988.github.io/HSK/audio/06/%E5%85%AB.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "爸爸",
+  "pinyin": "bàba",
+  "pos": "名",
+  "ja": "お父さん",
+  "audio": "https://tcll1988.github.io/HSK/audio/37/%E7%88%B8%E7%88%B8.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "北京",
+  "pinyin": "Běijīng",
+  "pos": "名固",
+  "ja": "北京",
+  "audio": "https://tcll1988.github.io/HSK/audio/18/%E5%8C%97%E4%BA%AC.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "杯子",
+  "pinyin": "bēizi",
+  "pos": "名",
+  "ja": "コップ、さかずき",
+  "audio": "https://tcll1988.github.io/HSK/audio/82/%E6%9D%AF%E5%AD%90.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "本",
+  "pinyin": "běn",
+  "pos": "量",
+  "ja": "…冊（書籍・ノートを数える）",
+  "audio": "https://tcll1988.github.io/HSK/audio/59/%E6%9C%AC.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "不",
+  "pinyin": "bù",
+  "pos": "副",
+  "ja": "いいえ、…しない、…ではない",
+  "audio": "https://tcll1988.github.io/HSK/audio/80/%E4%B8%8D.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "不客气",
+  "pinyin": "búkèqi",
+  "pos": "他",
+  "ja": "どういたしまして",
+  "audio": "https://tcll1988.github.io/HSK/audio/42/%E4%B8%8D%E5%AE%A2%E6%B0%94.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "菜",
+  "pinyin": "cài",
+  "pos": "名",
+  "ja": "料理、おかず",
+  "audio": "https://tcll1988.github.io/HSK/audio/43/%E8%8F%9C.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "茶",
+  "pinyin": "chá",
+  "pos": "名",
+  "ja": "お茶",
+  "audio": "https://tcll1988.github.io/HSK/audio/89/%E8%8C%B6.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "吃",
+  "pinyin": "chī",
+  "pos": "動",
+  "ja": "食べる",
+  "audio": "https://tcll1988.github.io/HSK/audio/62/%E5%90%83.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "出租车",
+  "pinyin": "chūzūchē",
+  "pos": "名",
+  "ja": "タクシー",
+  "audio": "https://tcll1988.github.io/HSK/audio/00/%E5%87%BA%E7%A7%9F%E8%BD%A6.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "大",
+  "pinyin": "dà",
+  "pos": "形",
+  "ja": "大きい、年長である",
+  "audio": "https://tcll1988.github.io/HSK/audio/54/%E5%A4%A7.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "打电话",
+  "pinyin": "dǎdiànhuà",
+  "pos": "動",
+  "ja": "電話をかける",
+  "audio": "https://tcll1988.github.io/HSK/audio/48/%E6%89%93%E7%94%B5%E8%AF%9D.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "的",
+  "pinyin": "de",
+  "pos": "助",
+  "ja": "助詞（連体修飾・所有）",
+  "audio": "https://tcll1988.github.io/HSK/audio/43/%E7%9A%84.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "点",
+  "pinyin": "diǎn",
+  "pos": "量",
+  "ja": "…時",
+  "audio": "https://tcll1988.github.io/HSK/audio/00/%E7%82%B9.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "电脑",
+  "pinyin": "diànnǎo",
+  "pos": "名",
+  "ja": "パソコン",
+  "audio": "https://tcll1988.github.io/HSK/audio/83/%E7%94%B5%E8%84%91.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "电视",
+  "pinyin": "diànshì",
+  "pos": "名",
+  "ja": "テレビ",
+  "audio": "https://tcll1988.github.io/HSK/audio/74/%E7%94%B5%E8%A7%86.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "电影",
+  "pinyin": "diànyǐng",
+  "pos": "名",
+  "ja": "映画",
+  "audio": "https://tcll1988.github.io/HSK/audio/91/%E7%94%B5%E5%BD%B1.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "东西",
+  "pinyin": "dōngxi",
+  "pos": "名",
+  "ja": "品物",
+  "audio": "https://tcll1988.github.io/HSK/audio/64/%E4%B8%9C%E8%A5%BF.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "都",
+  "pinyin": "dōu",
+  "pos": "副",
+  "ja": "みな、すべて",
+  "audio": "https://tcll1988.github.io/HSK/audio/76/%E9%83%BD.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "读",
+  "pinyin": "dú",
+  "pos": "動",
+  "ja": "音読する、（学校で）勉強する",
+  "audio": "https://tcll1988.github.io/HSK/audio/02/%E8%AF%BB.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "对不起",
+  "pinyin": "duìbuqǐ",
+  "pos": "他",
+  "ja": "すみません",
+  "audio": "https://tcll1988.github.io/HSK/audio/88/%E5%AF%B9%E4%B8%8D%E8%B5%B7.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "多",
+  "pinyin": "duō",
+  "pos": "形",
+  "ja": "多い",
+  "audio": "https://tcll1988.github.io/HSK/audio/97/%E5%A4%9A.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "多少",
+  "pinyin": "duōshǎo",
+  "pos": "代",
+  "ja": "いくら（数量を問う）、いくらか（不定の数量）",
+  "audio": "https://tcll1988.github.io/HSK/audio/44/%E5%A4%9A%E5%B0%91.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "二",
+  "pinyin": "èr",
+  "pos": "数",
+  "ja": "二（単独で）",
+  "audio": "https://tcll1988.github.io/HSK/audio/63/%E4%BA%8C.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "儿子",
+  "pinyin": "érzi",
+  "pos": "名",
+  "ja": "息子",
+  "audio": "https://tcll1988.github.io/HSK/audio/86/%E5%84%BF%E5%AD%90.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "饭馆",
+  "pinyin": "fànguǎn",
+  "pos": "名",
+  "ja": "レストラン",
+  "audio": "https://tcll1988.github.io/HSK/audio/26/%E9%A5%AD%E9%A6%86.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "飞机",
+  "pinyin": "fēijī",
+  "pos": "名",
+  "ja": "飛行機",
+  "audio": "https://tcll1988.github.io/HSK/audio/45/%E9%A3%9E%E6%9C%BA.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "分钟",
+  "pinyin": "fēnzhōng",
+  "pos": "名",
+  "ja": "…分間",
+  "audio": "https://tcll1988.github.io/HSK/audio/70/%E5%88%86%E9%92%9F.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "高兴",
+  "pinyin": "gāoxìng",
+  "pos": "形",
+  "ja": "うれしい",
+  "audio": "https://tcll1988.github.io/HSK/audio/85/%E9%AB%98%E5%85%B4.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "个",
+  "pinyin": "gè",
+  "pos": "量",
+  "ja": "…個（広く色々な名詞に用いる）",
+  "audio": "https://tcll1988.github.io/HSK/audio/21/%E4%B8%AA.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "工作",
+  "pinyin": "gōngzuò",
+  "pos": "動",
+  "ja": "仕事をする",
+  "audio": "https://tcll1988.github.io/HSK/audio/28/%E5%B7%A5%E4%BD%9C.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "狗",
+  "pinyin": "gǒu",
+  "pos": "名",
+  "ja": "犬",
+  "audio": "https://tcll1988.github.io/HSK/audio/22/%E7%8B%97.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "汉语",
+  "pinyin": "Hànyǔ",
+  "pos": "名",
+  "ja": "中国語",
+  "audio": "https://tcll1988.github.io/HSK/audio/75/%E6%B1%89%E8%AF%AD.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "好",
+  "pinyin": "hǎo",
+  "pos": "形",
+  "ja": "よい、申し分ない",
+  "audio": "https://tcll1988.github.io/HSK/audio/52/%E5%A5%BD.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "和",
+  "pinyin": "hé",
+  "pos": "介",
+  "ja": "…と",
+  "audio": "https://tcll1988.github.io/HSK/audio/83/%E5%92%8C.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "喝",
+  "pinyin": "hē",
+  "pos": "動",
+  "ja": "飲む",
+  "audio": "https://tcll1988.github.io/HSK/audio/00/%E5%96%9D.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "很",
+  "pinyin": "hěn",
+  "pos": "副",
+  "ja": "たいへん、とても",
+  "audio": "https://tcll1988.github.io/HSK/audio/83/%E5%BE%88.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "回",
+  "pinyin": "huí",
+  "pos": "量",
+  "ja": "…回",
+  "audio": "https://tcll1988.github.io/HSK/audio/45/%E5%9B%9E.mp3?v=20261020-voice-v2"
+ }
+];
+const WORD_SYL = {"爱": [["ài", 4]], "八": [["bā", 1]], "爸爸": [["bà", 4], ["ba", 0]], "北京": [["Běi", 3], ["jīng", 1]], "杯子": [["bēi", 1], ["zi", 0]], "本": [["běn", 3]], "不": [["bù", 4]], "不客气": [["bú", 2], ["kè", 4], ["qi", 0]], "菜": [["cài", 4]], "茶": [["chá", 2]], "吃": [["chī", 1]], "出租车": [["chū", 1], ["zū", 1], ["chē", 1]], "大": [["dà", 4]], "打电话": [["dǎ", 3], ["diàn", 4], ["huà", 4]], "的": [["de", 0]], "点": [["diǎn", 3]], "电脑": [["diàn", 4], ["nǎo", 3]], "电视": [["diàn", 4], ["shì", 4]], "电影": [["diàn", 4], ["yǐng", 3]], "东西": [["dōng", 1], ["xi", 0]], "都": [["dōu", 1]], "读": [["dú", 2]], "对不起": [["duì", 4], ["bu", 0], ["qǐ", 3]], "多": [["duō", 1]], "多少": [["duō", 1], ["shǎo", 3]], "二": [["èr", 4]], "儿子": [["ér", 2], ["zi", 0]], "饭馆": [["fàn", 4], ["guǎn", 3]], "飞机": [["fēi", 1], ["jī", 1]], "分钟": [["fēn", 1], ["zhōng", 1]], "高兴": [["gāo", 1], ["xìng", 4]], "个": [["gè", 4]], "工作": [["gōng", 1], ["zuò", 4]], "狗": [["gǒu", 3]], "汉语": [["Hàn", 4], ["yǔ", 3]], "好": [["hǎo", 3]], "和": [["hé", 2]], "喝": [["hē", 1]], "很": [["hěn", 3]], "回": [["huí", 2]]};
+function isoWeek(d = new Date()) { const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); const day = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - day); const y = t.getUTCFullYear(); const w = Math.ceil(((t - Date.UTC(y, 0, 1)) / 864e5 + 1) / 7); return { key: `${y}-W${String(w).padStart(2, '0')}`, sun: (() => { const s = new Date(d); s.setDate(d.getDate() + (7 - (d.getDay() || 7))); return s; })() }; }
+const hash = s => { let x = 2166136261; for (const ch of s) { x ^= ch.codePointAt(0); x = Math.imul(x, 16777619) >>> 0; } return x; };
+const V = { a: 'āáǎà', e: 'ēéěè', i: 'īíǐì', o: 'ōóǒò', u: 'ūúǔù', 'ü': 'ǖǘǚǜ' };
+function mark(syl, tone) { // 声調記号をつける（a,e優先、ou→o、それ以外は最後の母音）
+  const p = G.plain(syl); if (!tone) return p;
+  let i = p.search(/[aeAE]/); if (i < 0) i = p.toLowerCase().indexOf('ou'); if (i < 0) { for (let k = p.length - 1; k >= 0; k--) if (/[iouüIOUÜ]/.test(p[k])) { i = k; break; } }
+  if (i < 0) return p; const lo = p[i].toLowerCase(), m = V[lo][tone - 1];
+  return p.slice(0, i) + (p[i] === lo ? m : m.toUpperCase()) + p.slice(i + 1);
+}
+function toneVariants(w, rnd) { // 声調だけ違うピンイン（1音節を変える）
+  const syl = WORD_SYL[w.hanzi], out = new Set();
+  for (let tries = 0; tries < 60 && out.size < 3; tries++) {
+    const k = Math.floor(rnd() * syl.length); if (syl[k][1] === 0 && !syl.every(x => x[1] === 0)) continue;
+    const nt = 1 + Math.floor(rnd() * 4); if (nt === syl[k][1] || G.banTone(w.hanzi, k, nt)) continue;
+    const s = syl.map((x, j) => j === k ? mark(x[0], nt) : x[0]).join(''); if (s !== w.pinyin) out.add(s);
+  }
+  return [...out];
+}
+const W = isoWeek(); let rnd, qs = [], qi = 0, log = [], t0 = 0, practice = false;
+const st = G.load(); st.hist = st.hist || {};
+function build() {
+  rnd = G.seeded(hash('grokbot06' + W.key)); const orng = G.seeded(hash('grokbot06opt' + W.key + '|' + (st.name || ''))); const pool = WORDS.slice();
+  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  const types = ['L', 'P', 'H', 'L', 'P', 'H', 'L', 'P', 'H', 'L'];
+  const sh = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  return pool.slice(0, 10).map((w, i) => {
+    const ty = types[i], others = sh(WORDS.filter(x => x !== w));
+    let opts;
+    if (ty === 'L') opts = [w.ja, ...others.filter(x => x.ja !== w.ja).slice(0, 3).map(x => x.ja)];
+    else if (ty === 'P') { const v = toneVariants(w, rnd); opts = [w.pinyin, ...v, ...others.map(x => x.pinyin)].slice(0, 4); }
+    else opts = [w.hanzi, ...others.filter(x => x.hanzi.length === w.hanzi.length).slice(0, 3).map(x => x.hanzi)];
+    if (opts.length < 4) opts = opts.concat(others.map(x => ty === 'H' ? x.hanzi : x.ja).filter(x => !opts.includes(x))).slice(0, 4);
+    return { w, ty, ans: opts[0], opts, n: i + 1 };
+  }).map(q => { q.opts = G.shuffle(q.opts, orng); return q; }); // 問題は全員同じ（週ごと）、選択肢の順番は名前ごとに別（「1問目は2番」が広まらないように）
+}
+function renderTitle() {
+  G.$('#wk').textContent = `今週（${W.key}）の10問`;
+  const s = W.sun; G.$('#wkdesc').textContent = `今週の問題は ${s.getMonth() + 1}月${s.getDate()}日（日）まで同じです。1回目の記録が「今週の記録」になります。`;
+  G.$('#nm').value = st.name || '';
+  const h = st.hist[W.key], box = G.$('#mine'); box.innerHTML = '';
+  if (h) box.append(G.h('p', {}, `今週の記録：${h.score} / 10・${h.sec}秒（練習 ${h.practice || 0} 回）`), G.h('p', { class: 'small' }, 'もう一度挑戦すると「練習」になり、記録は変わりません。'));
+  const past = Object.keys(st.hist).sort().slice(-8);
+  if (past.length) box.append(G.h('p', { class: 'small' }, '最近の週：' + past.map(k => `${k.slice(5)} ${st.hist[k].score}点`).join('、')), histBars(past));
+}
+// 【合成：Claude Code 06 から移植】自分の週ごとの記録を棒グラフで見せる（ほかの人とは比べない。端末内だけ）
+function histBars(keys) {
+  const box = G.h('div', { class: 'hbars', role: 'img', 'aria-label': '週ごとの記録のグラフ' });
+  keys.forEach(k => { const v = st.hist[k].score; box.append(G.h('div', { class: 'hb' + (k === W.key ? ' now' : '') }, G.h('span', { class: 'hv' }, v), G.h('i', { style: `height:${Math.max(4, v * 8)}px` }), G.h('span', { class: 'hk' }, k.slice(5)))); });
+  return box;
+}
+function start() {
+  G.clearAll(); st.name = G.$('#nm').value.trim().replace(/[\s|]/g, '') || 'ななし'; G.save(st);
+  qs = build(); qi = 0; log = []; practice = !!st.hist[W.key]; t0 = performance.now();
+  G.every(250, () => { G.$('#hud').textContent = `${Math.floor((performance.now() - t0) / 1000)}秒${practice ? '（練習）' : ''}`; });
+  G.show('play'); ask();
+}
+const TYQ = { L: '聞いて、意味を選ぼう', P: '正しいピンイン（声調）はどれ？', H: '聞いて、漢字を選ぼう' };
+function ask() {
+  const q = qs[qi], c = G.$('#qcard'); G.$('#bar').style.width = (qi / qs.length * 100) + '%';
+  c.innerHTML = ''; G.$('#fb').innerHTML = ''; G.$('#next').style.display = 'none';
+  c.append(G.h('p', { class: 'small mt0' }, `第${q.n}問 / 10　${TYQ[q.ty]}`));
+  if (q.ty === 'P') c.append(G.zh(q.w.hanzi, 'big'), G.ja(q.w.ja));
+  else { c.append(G.h('button', { class: 'btn ghost', type: 'button', onclick: () => G.play(q.w.audio) }, '▶ 聞く')); G.play(q.w.audio); } // 聞く問題は最初に1回自動で流す
+  const box = G.$('#opts'); box.innerHTML = ''; const done = G.guard();
+  q.opts.forEach(o => { const b = G.h('button', { class: 'opt', type: 'button' }, q.ty === 'H' ? G.zh(o, 'mid') : q.ty === 'P' ? G.h('span', { lang: 'zh-Latn-pinyin', style: 'font-size:22px' }, o) : o); b.onclick = done(() => answer(b, o)); box.append(b); });
+  if (G.test) window.__t = { answer: q.ans, type: q.ty, opts: q.opts };
+}
+function answer(b, o) {
+  const q = qs[qi], ok = o === q.ans; G.lock(G.$('#opts'));
+  G.$$('#opts .opt').forEach((x, i) => { if (q.opts[i] === q.ans) x.classList.add('ok'); });
+  if (!ok) b.classList.add('ng');
+  log.push({ q, ok, got: o });
+  G.$('#fb').append(G.h('div', { class: 'fb ' + (ok ? 'ok' : 'ng') }, G.h('b', {}, ok ? '正解！' : '不正解'), G.h('p', {}, G.zh(q.w.hanzi, 'mid'), ' ', G.h('span', { lang: 'zh-Latn-pinyin' }, q.w.pinyin), '　' + q.w.ja), G.audioBtn(q.w.audio)));
+  const nx = G.$('#next'); nx.textContent = qi + 1 < qs.length ? '次へ' : '結果を見る'; nx.style.display = 'block'; nx.disabled = false; G.reveal(G.$('#fb'));
+}
+G.$('#next').onclick = () => { const nx = G.$('#next'); if (nx.disabled) return; nx.disabled = true; qi++; if (qi < qs.length) ask(); else finish(); };
+const ck = s => (hash('gb06|' + s) % 46656).toString(36).toUpperCase().padStart(3, '0');
+function finish() {
+  G.clearAll(); const sec = Math.round((performance.now() - t0) / 1000), score = log.filter(l => l.ok).length;
+  const miss = log.filter(l => !l.ok).map(l => l.q.n).join('.') || '0';
+  const body = `${st.name}|${W.key}|${score}|${sec}|${miss}${practice ? '|P' : ''}`; const code = `GB06|${body}|${ck(body)}`;
+  if (!practice) st.hist[W.key] = { score, sec, code, practice: 0 }; else st.hist[W.key].practice = (st.hist[W.key].practice || 0) + 1;
+  G.save(st); G.$('#hud').textContent = '';
+  G.$('#score').innerHTML = ''; G.$('#score').append(G.h('p', { style: 'font-size:32px;font-weight:700;margin:0' }, `${score} / 10`), G.h('p', {}, `時間 ${sec}秒${practice ? '（練習：今週の記録は変わりません）' : '（今週の記録）'}`));
+  G.$('#code').textContent = practice ? st.hist[W.key].code : code;
+  G.show('result');
+}
+G.$('#copy').onclick = async () => { const t = G.$('#code').textContent; try { await navigator.clipboard.writeText(t); G.toast('コピーしました'); } catch (e) { G.toast('コピーできませんでした。コードを長押ししてコピーしてください'); } };
+function renderReview() { const box = G.$('#rlist'); box.innerHTML = ''; const miss = log.filter(l => !l.ok); if (!miss.length) box.append(G.h('p', {}, '全問正解！')); miss.forEach(l => box.append(G.h('div', { class: 'card' }, G.zh(l.q.w.hanzi, 'mid'), ' ', G.h('b', { lang: 'zh-Latn-pinyin' }, l.q.w.pinyin), G.ja(`${l.q.w.ja} ／ あなたの答え：${l.got}`), G.audioBtn(l.q.w.audio)))); }
+G.$('#tally').onclick = () => {
+  const rows = [], bad = [], missCount = {}, seenK = new Set(); let dup = 0;
+  G.$('#codes').value.split(/\n/).map(s => s.trim()).filter(Boolean).forEach(line => {
+    const p = line.split('|'); if (p[0] !== 'GB06' || p.length < 7) return bad.push(line);
+    const sum = p.pop(), body = p.slice(1).join('|'); const valid = ck(body) === sum;
+    const r = { name: p[1], wk: p[2], score: +p[3], sec: +p[4], miss: p[5], practice: p[6] === 'P', valid };
+    const dk = r.name + '|' + r.wk; if (valid && seenK.has(dk)) { dup++; return; } if (valid) seenK.add(dk); rows.push(r); // 同じ名前・同じ週は最初の1つだけ数える
+    if (valid) r.miss.split('.').filter(x => x && x !== '0').forEach(n => missCount[n] = (missCount[n] || 0) + 1);
+  });
+  rows.sort((a, b) => b.valid - a.valid || b.score - a.score || a.sec - b.sec);
+  const out = G.$('#tout'); out.innerHTML = '';
+  const tb = G.h('table', {}, G.h('tr', {}, ...['順位', '名前', '週', '点', '秒', '確認'].map(x => G.h('th', {}, x))));
+  rows.forEach((r, i) => tb.append(G.h('tr', {}, G.h('td', {}, r.valid ? String(i + 1) : '—'), G.h('td', {}, r.name), G.h('td', {}, r.wk.slice(5)), G.h('td', {}, String(r.score)), G.h('td', {}, String(r.sec)), G.h('td', {}, r.valid ? 'OK' : '✗ 不一致'))));
+  out.append(tb);
+  const mc = Object.entries(missCount).sort((a, b) => b[1] - a[1]); if (mc.length) out.append(G.h('p', { class: 'small' }, 'まちがいが多い問題：' + mc.slice(0, 5).map(([n, c]) => `第${n}問（${c}人）`).join('、')));
+  if (dup) out.append(G.h('p', { class: 'small' }, `同じ名前・同じ週の2つ目以降：${dup}行（数えていません）`));
+  if (bad.length) out.append(G.h('p', { class: 'small' }, `読めない行：${bad.length}行`));
+};
+G.$('#go').onclick = start;
+G.$('#toReview').onclick = () => { renderReview(); G.show('review'); };
+G.$('#toTitle').onclick = G.$('#toTitle2').onclick = () => { G.clearAll(); G.stopAudio(); G.$('#hud').textContent = ''; renderTitle(); G.show('title'); };
+renderTitle();
+if (G.test) window.__build = build;
+</script>
+</body>
+</html>

@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<!--
+【03 読解探偵：高橋さん遅刻事件】 設計メモ（合成版：Grok Bot 版を土台に、各AI版の検証済みの長所を統合）
+■学習目標：読解 第11課「高桥迟到了」を読み、質問の答えと「その根拠になる一文」を本文から見つける。
+  日本の学生は漢字の意味から推測して「なんとなく」答えがちなので、根拠の文を指でさすことで、
+  因为…所以…、才、…得很晚／得厉害 などの読み取りを確かめる。最後に「なぜ遅刻したか」を推理する。
+■一局：質問5問（答え＋根拠）＋推理1問。約5〜7分。
+■画面：タイトル（事件の依頼、レベル）→ 証言を読む（本文9文、1文ずつ音声）→ 捜査（質問、選択肢3つ、根拠の文を1つ選ぶ、判定）
+  → 判定（答え○×・根拠○×、正しい根拠の文を表示）→ 推理（なぜ遅刻した？）→ 事件解決／推理ミス → 結果（点数・称号）
+  → 復習（質問ごとに正解と根拠の文、音声）。
+■素材：dokai_lesson11.js の9文を一字も変えずに表示（素材の空白・誤字もそのまま。先生への質問に記載）。
+  音声＝https://tcll1988.github.io/kaiwa-dokai/ ＋ 相対パス。新しく書いた内容：事件の導入、質問5問と推理1問、選択肢、
+  解説 → すべて ⚠先生確認。⚠は質問カードに1つ付け、選択肢には付けない（全部が新作なので差が出ない）。
+  正解の位置は毎回ランダム。根拠の文は強調表示しない（前回 Gemini の「正解の文を色で示す」漏れを避ける）。
+■難度：初級＝質問の日本語訳あり・本文の訳ボタンあり／中級＝中国語の質問だけ・訳なし。
+■スマホ・iPhone：本文カードは縦に並べ、タップで根拠を選ぶ。音声は▶で1文ずつ。横はみ出しなし。
+■効果の確かめ方：答えの正答と根拠の正答を分けて記録。授業前後で「根拠まで正しい」問題数を比べる。
+■リスク：選択式なので、根拠が2文にまたがる読み（例：遅刻＝②③）は推理問題でしか問えない。
+  素材の和訳「診査」は教材のまま（先生に確認）。
+■合成版（2026-10-26）：網頁版 Claude 03 の Lv3「音声だけ」を移植し、上級（本文は文字なし・音声で証拠を探す）を追加。
+■前端レビュー後：「判定する」を画面下に固定し、足りないもの（①答え・②証拠）を表示。問題の順番を毎回シャッフル。中級の証拠はピンインを「ピンインを表示」で見られる。「次へ」も画面下に固定。
+-->
+<html lang="ja" data-game="03-detective">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>読解探偵｜03</title>
+<style>:root{--bg:#f6f4ef;--card:#fff;--ink:#222;--sub:#666;--line:#d9d4c7;--pri:#2f5d8a;--pri2:#e8f0f8;--ok:#1f7a4d;--okbg:#e5f5ec;--ng:#b3261e;--ngbg:#fde9e7;--warn:#8a5a00;--warnbg:#fff4d6;--r:14px}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Noto Sans CJK JP",Meiryo,sans-serif;padding:0 0 calc(var(--fh,56px) + 12px)}
+.wrap{max-width:560px;margin:0 auto;padding:12px 14px}
+header.top{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--pri);color:#fff;position:sticky;top:0;z-index:5}
+header.top a.home{display:inline-flex;align-items:center;min-height:44px;min-width:44px;padding:0 10px;border:1px solid rgba(255,255,255,.65);border-radius:10px;color:#fff;text-decoration:none;font-size:14px;white-space:nowrap}
+header.top h1{font-size:17px;margin:0;flex:1;line-height:1.3}
+header.top .hud{font-size:14px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.screen{display:none}.screen.on{display:block;animation:fade .18s ease}
+@keyframes fade{from{opacity:.3}to{opacity:1}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin:10px 0}
+h2{font-size:19px;margin:6px 0 8px}h3{font-size:16px;margin:12px 0 6px}
+p{margin:6px 0}.sub{color:var(--sub);font-size:15px}.small{font-size:14px;color:#555}
+button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation}
+.btn{display:block;width:100%;min-height:52px;margin:8px 0;padding:10px 14px;border-radius:12px;border:1px solid var(--pri);background:var(--pri);color:#fff;font-size:17px;font-weight:600}
+.btn.ghost{background:#fff;color:var(--pri)}
+.btn.inline{display:inline-block;width:auto;min-width:44px;min-height:44px;padding:6px 14px;font-size:15px;margin:4px 4px 4px 0}
+.btn:disabled,.opt:disabled{opacity:.55;cursor:default}
+.row{display:flex;gap:8px;flex-wrap:wrap}.row>.btn{flex:1;min-width:120px}
+.opts{display:grid;gap:10px;margin:10px 0}
+.opts.two{grid-template-columns:1fr 1fr}
+.opt{display:block;width:100%;min-height:56px;text-align:left;padding:10px 12px;border-radius:12px;border:2px solid var(--line);background:#fff;font-size:16px;line-height:1.45}
+.opt.center{text-align:center}
+.opt.picked{border-color:var(--pri)}
+.opt.ok{border-color:var(--ok);background:var(--okbg)}
+.opt.ng{border-color:var(--ng);background:var(--ngbg)}
+.zh{font-family:"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Noto Sans SC","Microsoft YaHei",sans-serif}
+.zh.big{font-size:34px;line-height:1.25}.zh.mid{font-size:22px}
+.py{display:block;font-size:16px;color:#355;letter-spacing:.02em}
+.ja{display:block;font-size:16px;color:var(--sub)}
+.chk{display:inline-block;font-size:14px;line-height:1.4;padding:1px 6px;border-radius:6px;background:var(--warnbg);color:var(--warn);border:1px solid #f0d58a;white-space:nowrap;vertical-align:middle}
+.kb{display:inline-block;font-size:14px;padding:1px 6px;border-radius:6px;background:var(--pri2);color:var(--pri);border:1px solid #bcd;white-space:nowrap}
+.fb{border-radius:12px;padding:12px;margin:10px 0;font-size:15px}
+.fb.ok{background:var(--okbg);border:1px solid #9fd3b6}.fb.ng{background:var(--ngbg);border:1px solid #efb1ab}
+.fb.info{background:var(--pri2);border:1px solid #bcd}
+.audio{display:inline-flex;align-items:center;justify-content:center;gap:4px;min-width:48px;min-height:48px;padding:6px 12px;border-radius:24px;border:1px solid var(--pri);background:#fff;color:var(--pri);font-size:15px;font-weight:600}
+footer.note{position:fixed;left:0;right:0;bottom:0;background:#fffdf8;border-top:1px solid var(--line);font-size:14px;line-height:1.45;color:#555;padding:6px 10px calc(6px + env(safe-area-inset-bottom));text-align:center;z-index:6}
+#astat{min-height:0;font-size:15px;color:var(--ng)}
+.bar{height:8px;background:#e7e2d6;border-radius:4px;overflow:hidden}.bar>i{display:block;height:100%;background:var(--pri);width:0;transition:width .2s}
+table.t{width:100%;border-collapse:collapse;font-size:15px}table.t td,table.t th{border-bottom:1px solid var(--line);padding:6px 4px;text-align:left;vertical-align:top}
+.tag{display:inline-block;font-size:14px;border-radius:6px;padding:0 6px;background:#eee;color:#444}
+.shake{animation:shake .3s}@keyframes shake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+.center{text-align:center}.mt0{margin-top:0}
+.seg{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}.seg button{flex:1;min-width:90px;min-height:48px;border-radius:10px;border:2px solid var(--line);background:#fff;font-size:16px}
+.seg button[aria-pressed=true]{border-color:var(--pri);background:var(--pri2);color:var(--pri);font-weight:700}
+details{margin:8px 0}summary{cursor:pointer;min-height:44px;display:flex;align-items:center;color:var(--pri);font-weight:600}
+.toast{position:fixed;left:50%;bottom:70px;transform:translateX(-50%);background:#333;color:#fff;padding:8px 14px;border-radius:10px;font-size:14px;z-index:9;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw}
+.toast.on{opacity:.95}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* 答えたあとの大事なボタンを、スマホの画面下に固定して親指で押せるようにする（下の説明欄の上に出る） */
+.stick{position:sticky;bottom:calc(var(--fh,56px) + 6px);z-index:4;box-shadow:0 -4px 14px rgba(0,0,0,.12)}
+.stickbar{position:sticky;bottom:calc(var(--fh,56px));z-index:4;background:linear-gradient(rgba(246,244,239,0),var(--bg) 30%);padding:10px 0 2px;margin:0 -2px}
+.stickbar .btn{margin:4px 0}
+.py.hid{display:none}body.showpy .py.hid{display:block}
+/* 前端共通指摘：G.reveal() で出した「次へ」が固定フッターの下に隠れないように */
+.btn,.fb{scroll-margin-bottom:calc(var(--fh,56px) + 14px);scroll-margin-top:64px}
+
+.ev{display:flex;gap:8px;align-items:flex-start;width:100%;text-align:left;padding:10px;border:2px solid var(--line);border-radius:12px;background:#fff;margin:8px 0;min-height:56px}
+.ev .no{font-weight:700;color:var(--pri);min-width:24px}
+.ev.sel{border-color:var(--pri);background:var(--pri2)}
+.ev.ok{border-color:var(--ok);background:var(--okbg)}.ev.ng{border-color:var(--ng);background:var(--ngbg)}
+.sent{display:flex;gap:8px;align-items:flex-start;border-bottom:1px solid var(--line);padding:8px 0}
+.sent .tx{flex:1}
+.q{background:#fffdf3;border:1px solid #eadfb8;border-radius:12px;padding:12px}
+.step{font-weight:700;margin:12px 0 4px}
+.evrow{display:flex;gap:8px;align-items:center}.evrow .ev{flex:1;margin:6px 0}
+</style>
+</head>
+<body>
+<header class="top"><a class="home" href="../index.html" aria-label="目次にもどる">← 目次</a><h1>読解探偵</h1><span class="hud" id="hud"></span></header>
+<main class="wrap">
+<section class="screen on" id="title">
+  <div class="card"><p class="small">事件ファイル No.11 ／ 読解 第11課「高桥迟到了」 <span class="chk">⚠先生確認</span></p>
+  <h2>高橋さん遅刻事件</h2>
+  <p>依頼人はクラスの先生。「今日、高橋さんが授業に遅れてきました。いったい何があったのでしょう？」</p>
+  <p>証言（本文）を読んで、質問の<b>答え</b>と、その<b>証拠になる一文</b>を見つけよう。最後に真相を推理します。</p></div>
+  <div class="card"><h3 class="mt0">レベル</h3>
+  <div class="seg" id="lv"><button type="button" data-l="1" aria-pressed="true">初級（訳あり）</button><button type="button" data-l="2" aria-pressed="false">中級（中国語だけ）</button><button type="button" data-l="3" aria-pressed="false">上級（聞くだけ）</button></div>
+  <p class="small" id="lvdesc"></p>
+  <button class="btn" id="go" type="button">証言を読む</button>
+  <p class="small" id="best"></p></div>
+</section>
+
+<section class="screen" id="read">
+  <div class="card"><h2 class="mt0">証言（本文）</h2><p class="small">▶で1文ずつ聞けます。読めたら捜査開始！</p><div id="text"></div></div>
+  <button class="btn" id="startQ" type="button">捜査開始</button>
+</section>
+
+<section class="screen" id="quest">
+  <div class="q" id="qbox"></div>
+  <div id="astat"></div>
+  <p class="step">① 答えを選ぶ</p><div class="opts" id="opts"></div>
+  <p class="step">② 証拠になる一文を選ぶ</p><div id="evs"></div>
+  <div class="stickbar" id="jbar"><button class="btn" id="judge" type="button" disabled>判定する</button></div>
+  <div id="fb"></div>
+  <button class="btn stick" id="next" type="button" style="display:none">次へ</button>
+</section>
+
+<section class="screen" id="deduce">
+  <div class="q" id="dbox"></div>
+  <div class="opts" id="dopts"></div>
+  <div id="dfb"></div>
+  <button class="btn" id="toResult" type="button" style="display:none">結果を見る</button>
+</section>
+
+<section class="screen" id="result">
+  <div class="card center"><h2>結果</h2><div id="score"></div></div>
+  <button class="btn" id="toReview" type="button">復習（証拠の確認）</button>
+  <button class="btn ghost" id="again" type="button">もう一度</button>
+  <button class="btn ghost" id="toTitle" type="button">タイトルへ</button>
+</section>
+
+<section class="screen" id="review">
+  <div class="card"><h2>復習</h2><div id="rlist"></div></div>
+  <button class="btn ghost" id="toTitle2" type="button">タイトルへ</button>
+</section>
+</main>
+<footer class="note">音声：先生の声をもとに合成（課文の録音） ／ 質問・選択肢・解説は ⚠先生確認</footer>
+<script>
+'use strict';
+/* 共通部品（各ファイルに同じものを埋め込み。外部ライブラリなし） */
+const G = (() => {
+  const GAME = document.documentElement.dataset.game || 'x';
+  const KEY = 'cngame.' + GAME; // 合成版の保存キー
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  function h(tag, props, ...kids) {
+    const e = document.createElement(tag);
+    for (const [k, v] of Object.entries(props || {})) {
+      if (v == null || v === false) continue;
+      if (k === 'class') e.className = v; else if (k === 'text') e.textContent = v; else if (k === 'html') e.innerHTML = v;
+      else if (k === 'style') e.style.cssText = v;
+      else if (k.startsWith('on') && typeof v === 'function') e.addEventListener(k.slice(2), v);
+      else e.setAttribute(k, v === true ? '' : v);
+    }
+    for (const c of kids.flat(9)) { if (c == null || c === false) continue; e.append(c.nodeType ? c : document.createTextNode(String(c))); }
+    return e;
+  }
+  // append(…, null) で「null」と表示されないように（null / false は飛ばす）
+  { const ap = Element.prototype.append; Element.prototype.append = function (...a) { return ap.apply(this, a.filter(x => x != null && x !== false)); }; }
+  let rnd = Math.random;
+  function seeded(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  function shuffle(a, r = rnd) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+  function pick(a, n, r = rnd) { return shuffle(a, r).slice(0, n); }
+  // ---- 保存（localStorage のみ。使えない環境でも遊べる） ----
+  let mem = {};
+  function load() { try { const s = localStorage.getItem(KEY); return s ? JSON.parse(s) : {}; } catch (e) { return mem; } }
+  function save(o) { mem = o; try { localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) { } }
+  // ---- 画面切り替え ----
+  function show(id) { $$('.screen').forEach(s => s.classList.toggle('on', s.id === id)); window.scrollTo(0, 0); }
+  // ---- タイマー（重ねがけ防止：新しい回の前に必ず clearAll） ----
+  const T = new Set();
+  function after(ms, fn) { const id = setTimeout(() => { T.delete(id); fn(); }, ms); T.add(id); return id; }
+  function every(ms, fn) { const id = setInterval(fn, ms); T.add(-id); return id; }
+  function clearAll() { for (const id of T) { if (id < 0) clearInterval(-id); else clearTimeout(id); } T.clear(); }
+  // ---- 音声（1つの Audio を使い回す。失敗は画面内に表示、alert は使わない） ----
+  const au = new Audio(); au.preload = 'auto';
+  let playSeq = 0;
+  function play(url) {
+    const seq = ++playSeq; const st = $('#astat');
+    if (st) st.textContent = '';
+    return new Promise(res => {
+      if (!url) return res(false);
+      try { au.pause(); } catch (e) { }
+      au.onended = () => { if (seq === playSeq) res(true); };
+      au.onerror = () => { if (seq === playSeq) { if (st) st.textContent = '音声を再生できませんでした。通信状況を確認して、もう一度押してください。'; fail(url); res(false); } };
+      au.src = url;
+      const p = au.play();
+      if (p && p.catch) p.catch(err => { if (seq !== playSeq) return; if (err && err.name === 'AbortError') return; if (st) st.textContent = '音声を再生できませんでした（' + (err && err.name === 'NotAllowedError' ? 'もう一度ボタンを押してください' : '通信状況を確認してください') + '）。'; fail(url); res(false); });
+    });
+  }
+  // 再生できなかったことを各ゲームに知らせる（時間制のゲームはタイマーを止めて、文字のヒントを出す）
+  function fail(url) { try { window.dispatchEvent(new CustomEvent('audiofail', { detail: url })); } catch (e) { } }
+  function stopAudio() { playSeq++; try { au.pause(); } catch (e) { } }
+  function audioBtn(url, label = '▶ 聞く') { return h('button', { class: 'audio', type: 'button', 'aria-label': '音声を聞く', onclick: () => play(url) }, label); }
+  // ---- 表示部品 ----
+  const zh = (t, cls = '') => h('span', { class: 'zh ' + cls, lang: 'zh-CN' }, t);
+  const py = t => h('span', { class: 'py', lang: 'zh-Latn-pinyin' }, t);
+  const ja = t => h('span', { class: 'ja' }, t);
+  // 中級・上級用：ピンインは最初は隠しておき、「ピンイン」ボタンで出せる（中国語には必ずピンインが付いている状態にする）
+  const pyh = t => h('span', { class: 'py hid', lang: 'zh-Latn-pinyin' }, t);
+  function pyBtn() { const b = h('button', { class: 'btn inline ghost pybtn', type: 'button', 'aria-pressed': String(document.body.classList.contains('showpy')) }, document.body.classList.contains('showpy') ? 'ピンインを隠す' : 'ピンインを表示'); b.onclick = () => { const on = document.body.classList.toggle('showpy'); $$('.pybtn').forEach(x => { x.textContent = on ? 'ピンインを隠す' : 'ピンインを表示'; x.setAttribute('aria-pressed', String(on)); }); }; return b; }
+  const chk = () => h('span', { class: 'chk' }, '⚠先生確認');
+  const kb = t => h('span', { class: 'kb' }, t);
+  function plain(p) { return p.normalize('NFD').replace(/[\u0300-\u0304\u0306\u0307\u0309-\u036f]/g, '').normalize('NFC'); }
+  let toastT = 0;
+  function toast(m) { let t = $('.toast'); if (!t) { t = h('div', { class: 'toast', role: 'status' }); document.body.append(t); } t.textContent = m; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 1800); }
+  // ---- 連打対策：1問につき1回だけ受け付ける ----
+  function guard() { let used = false; const born = performance.now(); return fn => (...a) => { if (used || performance.now() - born < 300) return; used = true; fn(...a); }; } // 表示直後0.3秒のタップは前の画面の連打とみなして無視
+  function lock(box) { $$('button', box).forEach(b => b.disabled = true); }
+  const today = (d = new Date()) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  // ---- 連打対策：前のタップの時点で見えていなかった要素への 0.35 秒以内のタップは無視（画面が変わった直後の指の2回目） ----
+  let lastTap = -1e9, seenVis = new WeakMap();
+  document.addEventListener('click', e => {
+    if (!e.isTrusted) return;
+    const SEL = 'button,a,[role=button],.opt,.part,.tile,.hole', now = performance.now(), el = e.target.closest(SEL);
+    if (!el) return; // ボタン以外のタップは対象外（全要素を調べないので軽い）
+    if (now - lastTap < 350 && seenVis.get(el) !== true) { e.stopPropagation(); e.preventDefault(); return; }
+    lastTap = now; seenVis = new WeakMap(); for (const x of document.querySelectorAll(SEL)) seenVis.set(x, x.offsetParent !== null || x.getClientRects().length > 0);
+  }, true);
+  // 答えたあと、フィードバックや「次へ」が画面に入るようにスクロール（動きを減らす設定なら一瞬で）
+  const reduce = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function reveal(el, block = 'nearest') { if (!el) return; try { el.scrollIntoView({ block, behavior: reduce() ? 'auto' : 'smooth' }); } catch (e) { el.scrollIntoView(); } } // 同期で呼ぶ（rAF だと直後のタップに間に合わないことがある）
+  // 下の説明欄の高さを CSS 変数 --fh に入れる（説明欄が2行になってもボタンが隠れない）
+  function fh() { const f = document.querySelector('footer.note'); document.documentElement.style.setProperty('--fh', (f ? f.offsetHeight : 0) + 'px'); }
+  addEventListener('resize', fh); document.addEventListener('DOMContentLoaded', fh); setTimeout(fh, 0);
+  // 声調の誤答選択肢に使わない声調（その字の別の正しい読み・変調形）。例：好 hào、和 hè、喝 hè、读 dù、不 bú/bù、都 dū、的 dí/dì
+  const BANT = { 好: [4], 和: [4], 喝: [4], 读: [4], 不: [2, 4], 都: [1], 的: [2, 4], 少: [4], 分: [4], 作: [1], 兴: [1], 打: [2], 八: [2], 个: [3], 语: [4] };
+  const banTone = (hz, k, t) => { const c = [...hz][k]; return !!(BANT[c] && BANT[c].includes(t)); };
+  const test = /[?&]test=1/.test(location.search);
+  return { GAME, $, $$, h, shuffle, pick, seeded, setRand: f => rnd = f, rand: () => rnd(), load, save, show, after, every, clearAll, play, stopAudio, audioBtn, zh, py, ja, chk, kb, plain, toast, guard, lock, today, test, reveal, reduce, pyh, pyBtn, BANT, banTone };
+})();
+
+const DOKAI = [
+ {
+  "id": "d1-11k-h-1",
+  "ch": "高桥病了。她头疼，嗓子疼，咳嗽得厉害。",
+  "py": "Gāoqiáo bìng le.　Tā tóu téng sǎngzi téng, késou de lìhài.",
+  "jp": "高橋さんは病気になりました。彼女は頭が痛くて、のどが痛くて、咳がひどいです。",
+  "audio": "dokai/11k/homework/dokai/sound/d1-11k-h-1.mp3",
+  "page": "dokai/11k/homework/dokai/11k-h-1.html"
+ },
+ {
+  "id": "d1-11k-h-2",
+  "ch": "因为有点儿不舒服，所 以她今天起得很晚。",
+  "py": "Yīnwèi yǒudiǎnr bù shūfu, Suǒyǐ tā jīntiān qǐ de hěn wǎn.",
+  "jp": "体調がちょっと良くないので、今日彼女は起きるのがとても遅かったです。",
+  "audio": "dokai/11k/homework/dokai/sound/d1-11k-h-2.mp3",
+  "page": "dokai/11k/homework/dokai/11k-h-1.html"
+ },
+ {
+  "id": "d1-11k-h-3",
+  "ch": "应该上午 9 点 10 分开始上课，但她 9 点 20 分才到学校，她迟到了。",
+  "py": "Yīnggāi shàngwu jiǔ diǎn shí fēn kāishǐ shàng kè, dàn tā jiǔ diǎn  èrshí fēn cái dào xuéxiào, tā chídào le.",
+  "jp": "授業は9時10分から始まるべきですが、彼女は9時20分にやっと学校に着きました。彼女は遅刻しました。",
+  "audio": "dokai/11k/homework/dokai/sound/d1-11k-h-3.mp3",
+  "page": "dokai/11k/homework/dokai/11k-h-1.html"
+ },
+ {
+  "id": "d1-11k-h-4",
+  "ch": "上课时，她嗓子疼得厉害，课文念得不太好。",
+  "py": "Shàng kè shí, tā sǎngzi téng de lìhài,Kèwén niàn de bú tài hǎo.",
+  "jp": "授業の時、彼女はのどがすごく痛かったので、本文をあまりうまく読めなかったです。",
+  "audio": "dokai/11k/homework/dokai/sound/d1-11k-h-4.mp3",
+  "page": "dokai/11k/homework/dokai/11k-h-1.html"
+ },
+ {
+  "id": "d1-11k-h-5",
+  "ch": "下午高桥走得很早，她去医院看病了。",
+  "py": "Xiàwǔ Gāoqiáo zǒu de hěn zǎo Tā qù yīyuàn kàn bìng le.",
+  "jp": "午後、高橋さんはとても早く帰りました。彼女は病院へ診査に行きました。",
+  "audio": "dokai/11k/homework/dokai/sound/d1-11k-h-5.mp3",
+  "page": "dokai/11k/homework/dokai/11k-h-1.html"
+ },
+ {
+  "id": "d1-11k-h-6",
+  "ch": "医生给她量了体温，检查了嗓子，写了药方。",
+  "py": "Yīshēng gěi tā liáng le tǐwēn,   jiǎnchá le sǎngzi, xiě le yàofāng.",
+  "jp": "お医者さんは体温を測ってあげたり、のどの診査をしてあげたり、処方箋を処方してあげたりしました。",
+  "audio": "dokai/11k/homework/dokai/sound/d1-11k-h-6.mp3",
+  "page": "dokai/11k/homework/dokai/11k-h-1.html"
+ },
+ {
+  "id": "d1-11k-h-7",
+  "ch": "医生说她感冒了，嗓子肿得厉害。",
+  "py": "Yīshēng shuō tā gǎnmào le, Sǎngzi zhǒng de lìhài.",
+  "jp": "先生は、彼女が風邪で、のどがすごく腫れていると言いました。",
+  "audio": "dokai/11k/homework/dokai/sound/d1-11k-h-7.mp3",
+  "page": "dokai/11k/homework/dokai/11k-h-1.html"
+ },
+ {
+  "id": "d1-11k-h-8",
+  "ch": "医生让她好好儿休息。",
+  "py": "Yīshēng ràng tā hǎohǎor xiūxi.",
+  "jp": "お医者さんは、彼女にしっかりと休むようにと注意しました。",
+  "audio": "dokai/11k/homework/dokai/sound/d1-11k-h-8.mp3",
+  "page": "dokai/11k/homework/dokai/11k-h-1.html"
+ },
+ {
+  "id": "d1-11k-h-9",
+  "ch": "今天晚饭高桥吃得不多，困得厉害，晚上 9 点她就睡觉了。",
+  "py": "Jīntiān wǎnfàn Gāoqiáo chī de bù duō, Kùn de lìhài, wǎnshang jiǔ diǎn tāj iù shuìjiào le.",
+  "jp": "今日の晩ご飯、高橋さんはちょっとしか食べませんでした。彼女はすごく眠くて、夜9時にもう寝ました。",
+  "audio": "dokai/11k/homework/dokai/sound/d1-11k-h-9.mp3",
+  "page": "dokai/11k/homework/dokai/11k-h-1.html"
+ }
+];
+const KD_BASE = 'https://tcll1988.github.io/kaiwa-dokai/';
+const NUM = '①②③④⑤⑥⑦⑧⑨';
+const IDX = Object.fromEntries(DOKAI.map((s, i) => [s.id, i]));
+// ⚠先生確認：質問・選択肢・解説（新しく書いた内容。正解は ok:true、表示順は毎回シャッフル）
+let QS = [
+  { zh: '高桥今天起得早不早？', py: 'Gāoqiáo jīntiān qǐ de zǎo bu zǎo?', ja: '高橋さんは今日、起きるのが早かったですか。', ev: 'd1-11k-h-2',
+    o: [['起得很晚。', 'Qǐ de hěn wǎn.', 1], ['起得很早。', 'Qǐ de hěn zǎo.'], ['她没起床。', 'Tā méi qǐchuáng.']], why: '②に「她今天起得很晚」（今日は起きるのが遅かった）とあります。' },
+  { zh: '高桥几点到学校？', py: 'Gāoqiáo jǐ diǎn dào xuéxiào?', ja: '高橋さんは何時に学校に着きましたか。', ev: 'd1-11k-h-3',
+    o: [['9点20分。', 'Jiǔ diǎn èrshí fēn.', 1], ['9点10分。', 'Jiǔ diǎn shí fēn.'], ['下午。', 'Xiàwǔ.']], why: '③：授業は9時10分から。「9 点 20 分才到学校」＝9時20分にやっと着いた。「才」に注目。' },
+  { zh: '上课时，高桥课文念得怎么样？', py: 'Shàng kè shí, Gāoqiáo kèwén niàn de zěnmeyàng?', ja: '授業のとき、高橋さんは本文をどのように読みましたか。', ev: 'd1-11k-h-4',
+    o: [['念得不太好。', 'Niàn de bú tài hǎo.', 1], ['念得很好。', 'Niàn de hěn hǎo.'], ['她没念课文。', 'Tā méi niàn kèwén.']], why: '④に「课文念得不太好」とあります。のどが痛かったからです。' },
+  { zh: '下午高桥去哪儿了？', py: 'Xiàwǔ Gāoqiáo qù nǎr le?', ja: '午後、高橋さんはどこへ行きましたか。', ev: 'd1-11k-h-5',
+    o: [['去医院了。', 'Qù yīyuàn le.', 1], ['去商店了。', 'Qù shāngdiàn le.'], ['去朋友家了。', 'Qù péngyou jiā le.']], why: '⑤に「她去医院看病了」（病院へ行った）とあります。' },
+  { zh: '医生说高桥怎么了？', py: 'Yīshēng shuō Gāoqiáo zěnme le?', ja: 'お医者さんは、高橋さんがどうしたと言いましたか。', ev: 'd1-11k-h-7',
+    o: [['她感冒了。', 'Tā gǎnmào le.', 1], ['她没有病。', 'Tā méiyǒu bìng.'], ['她起得很早。', 'Tā qǐ de hěn zǎo.']], why: '⑦に「医生说她感冒了」とあります。' }
+];
+const DED = { zh: '高桥为什么迟到了？', py: 'Gāoqiáo wèi shénme chídào le?', ja: '高橋さんはなぜ遅刻したのですか。',
+  o: [{ zh: '因为她病了，起得很晚。', py: 'Yīnwèi tā bìng le, qǐ de hěn wǎn.', ok: true },
+      { zh: '因为她起得很早，去医院了。', py: 'Yīnwèi tā qǐ de hěn zǎo, qù yīyuàn le.', miss: '推理ミス！②には「起得很晚」とあります。病院へ行ったのも午後（⑤）です。' },
+      { zh: '因为上课9点20分开始。', py: 'Yīnwèi shàng kè jiǔ diǎn èrshí fēn kāishǐ.', miss: '推理ミス！③には「应该上午 9 点 10 分开始上课」（授業は9時10分から）とあります。' }],
+  solved: '真相：高橋さんは風邪をひいていた。体調が悪くて起きるのが遅くなり（②）、9時10分からの授業に9時20分に着いた（③）。午後は病院へ行き（⑤）、お医者さんは「感冒了」と言った（⑦）。遅刻の犯人は「かぜ」だった！' };
+let lv = 1, qi = 0, log = [], sel = { a: null, e: null }, done = false, dedOK = false;
+const st = G.load();
+// 【合成：網頁版 Claude 03 の Lv3「音声だけ」を移植】上級は本文の文字を出さず、音声だけで証拠の文を探す。
+const LVD = { 1: '質問の日本語訳あり。本文は「訳」ボタンで訳が見られます。', 2: '質問も本文も中国語だけ（ピンインは「ピンインを表示」）。', 3: '本文は文字なし・音声だけ。①〜⑨を聞いて証拠の文を選びます（答え合わせのあとに文字が出ます）。' };
+function setLv(n) { lv = n; G.$$('#lv button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.l === n))); G.$('#lvdesc').textContent = LVD[n]; }
+G.$$('#lv button').forEach(b => b.onclick = () => setLv(+b.dataset.l));
+function showBest() { G.$('#best').textContent = st.best != null ? `自己ベスト：${st.best} / 11 点` : ''; }
+function sentRow(s, i) {
+  if (lv === 3) return G.h('div', { class: 'sent' }, G.h('b', { style: 'color:#2f5d8a' }, NUM[i]), G.h('div', { class: 'tx sub' }, '（文字なし・聞いて覚えよう）'), G.audioBtn(KD_BASE + s.audio, '▶'));
+  const tx = G.h('div', { class: 'tx' }, G.zh(s.ch), G.py(s.py));
+  if (lv === 1) { const j = G.ja(s.jp); j.hidden = true; tx.append(G.h('button', { class: 'btn inline ghost', type: 'button', onclick: () => j.hidden = !j.hidden }, '訳'), j); }
+  return G.h('div', { class: 'sent' }, G.h('b', { style: 'color:#2f5d8a' }, NUM[i]), tx, G.audioBtn(KD_BASE + s.audio, '▶'));
+}
+function startRead() { G.clearAll(); G.stopAudio(); const t = G.$('#text'); t.innerHTML = ''; DOKAI.forEach((s, i) => t.append(sentRow(s, i))); G.show('read'); }
+function startQ() { QS = G.shuffle(QS); qi = 0; // 質問の順番は毎回変える
+  log = []; dedOK = false; ask(); G.show('quest'); }
+function ask() {
+  const q = QS[qi]; sel = { a: null, e: null }; done = false;
+  G.$('#hud').textContent = `質問 ${qi + 1} / ${QS.length}`;
+  const qb = G.$('#qbox'); qb.innerHTML = '';
+  qb.append(G.h('p', { class: 'small mt0' }, `質問 ${qi + 1} `, G.chk()), G.zh(q.zh, 'mid'), lv === 3 ? G.pyh(q.py) : G.py(q.py), lv === 1 ? G.ja(q.ja) : G.pyBtn());
+  const op = G.$('#opts'); op.innerHTML = '';
+  G.shuffle(q.o).forEach(o => { const b = G.h('button', { class: 'opt', type: 'button', 'data-k': o[0] }, G.zh(o[0], 'mid'), G.py(o[1])); b.onclick = () => { if (done) return; sel.a = o; G.$$('.opt', op).forEach(x => x.classList.toggle('picked', x === b)); upd(); }; op.append(b); });
+  const ev = G.$('#evs'); ev.innerHTML = '';
+  DOKAI.forEach((s, i) => { const b = G.h('button', { class: 'ev', type: 'button', 'data-id': s.id }, G.h('span', { class: 'no' }, NUM[i]), lv === 3 ? G.h('span', {}, `${i + 1}番目の文`) : G.h('span', {}, G.zh(s.ch), lv === 1 ? G.py(s.py) : G.pyh(s.py))); b.onclick = () => { if (done) return; sel.e = s.id; G.$$('.ev', ev).forEach(x => x.classList.toggle('sel', x === b)); upd(); }; ev.append(lv === 3 ? G.h('div', { class: 'evrow' }, b, G.audioBtn(KD_BASE + s.audio, '▶')) : b); });
+  G.$('#fb').innerHTML = ''; G.$('#next').style.display = 'none'; G.$('#jbar').style.display = 'block'; upd();
+  if (G.test) window.__t = { answer: q.o.find(o => o[2])[0], ev: q.ev };
+}
+function upd() { const j = G.$('#judge'); j.disabled = done || !(sel.a && sel.e); j.textContent = sel.a && sel.e ? '判定する' : !sel.a && !sel.e ? '判定する（①答え と ②証拠 を選ぼう）' : !sel.a ? '判定する（①答え を選ぼう）' : '判定する（②証拠 を選ぼう）'; } // 画面の下にいつも出ている
+G.$('#judge').onclick = () => {
+  if (done || !(sel.a && sel.e)) return; done = true; G.$('#judge').disabled = true; G.$('#jbar').style.display = 'none';
+  const q = QS[qi], aok = !!sel.a[2], eok = sel.e === q.ev;
+  G.$$('#opts .opt').forEach(b => { b.disabled = true; const o = q.o.find(x => x[0] === b.dataset.k); if (o[2]) b.classList.add('ok'); else if (o === sel.a) b.classList.add('ng'); });
+  G.$$('#evs .evrow .audio').forEach(b => b.disabled = false);
+  G.$$('#evs .ev').forEach(b => { b.disabled = true; if (b.dataset.id === q.ev) b.classList.add('ok'); else if (b.dataset.id === sel.e) b.classList.add('ng'); });
+  log.push({ q, a: sel.a, e: sel.e, aok, eok });
+  const s = DOKAI[IDX[q.ev]];
+  G.$('#fb').append(G.h('div', { class: 'fb ' + (aok && eok ? 'ok' : 'ng') },
+    G.h('b', {}, aok && eok ? '◎ 答えも証拠もバッチリ！' : aok ? '○ 答えは正解。でも証拠の文がちがいます。' : eok ? '△ 証拠の文は合っています。答えをもう一度読もう。' : '× 不正解'),
+    G.h('p', {}, '正解：', G.zh(q.o.find(o => o[2])[0]), '　証拠：' + NUM[IDX[q.ev]]),
+    G.h('p', {}, G.zh(s.ch), ' ', G.audioBtn(KD_BASE + s.audio, '▶')), G.h('p', { class: 'small' }, q.why + ' ⚠先生確認')));
+  const nx = G.$('#next'); nx.textContent = qi + 1 < QS.length ? '次の質問へ' : '推理へ進む'; nx.style.display = 'block'; nx.disabled = false;
+  G.reveal(G.$('#fb'), 'start');
+};
+G.$('#next').onclick = () => { const nx = G.$('#next'); if (nx.disabled) return; nx.disabled = true; qi++; if (qi < QS.length) { ask(); window.scrollTo(0, 0); } else deduce(); };
+function deduce() {
+  G.$('#hud').textContent = '推理';
+  const d = G.$('#dbox'); d.innerHTML = '';
+  d.append(G.h('p', { class: 'small mt0' }, '最後の推理 ', G.chk()), G.zh(DED.zh, 'mid'), G.py(DED.py), lv === 1 ? G.ja(DED.ja) : null);
+  const op = G.$('#dopts'); op.innerHTML = ''; G.$('#dfb').innerHTML = ''; G.$('#toResult').style.display = 'none';
+  const once = G.guard();
+  G.shuffle(DED.o).forEach(o => { const b = G.h('button', { class: 'opt', type: 'button' }, G.zh(o.zh, 'mid'), G.py(o.py)); b.onclick = once(() => {
+    G.lock(op); dedOK = !!o.ok; b.classList.add(o.ok ? 'ok' : 'ng');
+    G.$('#dfb').append(G.h('div', { class: 'fb ' + (o.ok ? 'ok' : 'ng') }, G.h('b', {}, o.ok ? '🔍 事件解決！' : '💦 ' + o.miss), G.h('p', {}, DED.solved), G.h('p', { class: 'small' }, '⚠先生確認')));
+    G.$('#toResult').style.display = 'block';
+  }); op.append(b); });
+  if (G.test) window.__t = { answer: DED.o[0].zh };
+  G.show('deduce');
+}
+G.$('#toResult').onclick = () => {
+  const pts = log.reduce((s, l) => s + (l.aok ? 1 : 0) + (l.eok ? 1 : 0), 0) + (dedOK ? 1 : 0);
+  if (st.best == null || pts > st.best) st.best = pts; G.save(st);
+  const title = pts >= 10 ? '名探偵' : pts >= 7 ? '敏腕刑事' : pts >= 4 ? '見習い探偵' : '探偵の卵';
+  const sc = G.$('#score'); sc.innerHTML = '';
+  sc.append(G.h('p', { style: 'font-size:28px;font-weight:700;margin:0' }, `${pts} / 11 点`), G.h('p', {}, `称号：${title}`),
+    G.h('p', { class: 'small' }, `答え ${log.filter(l => l.aok).length}/5・証拠 ${log.filter(l => l.eok).length}/5・推理 ${dedOK ? '○' : '×'}`));
+  G.$('#hud').textContent = ''; G.show('result');
+};
+function renderReview() {
+  const box = G.$('#rlist'); box.innerHTML = '';
+  log.forEach((l, i) => { const s = DOKAI[IDX[l.q.ev]]; box.append(G.h('div', { class: 'card' }, G.h('p', { class: 'small mt0' }, `質問${i + 1} ${l.aok ? '○' : '×'}答え ${l.eok ? '○' : '×'}証拠`), G.zh(l.q.zh), G.py(l.q.py), G.ja(l.q.ja), G.h('p', {}, '正解：', G.zh(l.q.o.find(o => o[2])[0])), G.h('p', {}, NUM[IDX[l.q.ev]] + ' ', G.zh(s.ch), G.py(s.py), G.ja(s.jp)), G.audioBtn(KD_BASE + s.audio))); });
+}
+G.$("#go").onclick = startRead; G.$('#startQ').onclick = startQ; G.$('#again').onclick = startRead;
+G.$('#toReview').onclick = () => { renderReview(); G.show('review'); };
+G.$('#toTitle').onclick = G.$('#toTitle2').onclick = () => { G.clearAll(); G.stopAudio(); showBest(); G.$('#hud').textContent = ''; G.show('title'); };
+setLv(1); showBest();
+</script>
+</body>
+</html>

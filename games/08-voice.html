@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<!--
+【08 声調ミラー（録音して先生の声と比べる）】 設計メモ（合成版：Grok Bot 版を土台に、各AI版の検証済みの長所を統合）
+■学習目標：自分の声の高さの動き（声調）を「目で見て」お手本と比べる。日本語は高低アクセントが2段階なので、
+  日本の学生は第3声を低く抑えられない・第2声が上がりきらない・第4声が短く落ちない、が多い。線で見ると自分で気づける。
+■一局：1語あたり 録音2〜3秒＋確認。10語で約5分。
+■画面：タイトル（マイクの説明）→ 練習（語カード・お手本の線・▶お手本・●録音・自分の線・★目安・▶自分の声・自己チェック）
+  → 一覧（語ごとのベスト★）。マイクが使えないとき：理由と開き方（iPhone／LINE／Teams）を表示 → 「形当てモード」（マイクなし）：
+  お手本を聞いて、4つの線の形から正しい声調の形を選ぶ10問。
+■素材：sample_words.json の40語と音声（先生の声をもとに合成）。お手本の線は音声ファイルをこの端末の中で解析して描く。
+  録音はこの端末の中だけで処理し、保存も送信もしない（ページを閉じると消える）。
+■難度：1音節語 → 2音節語 → 軽声・3音節語 の順。形当てモードも同じ順で、選択肢は声調だけが違う形。
+■技術：録音は MediaRecorder を使わず、マイクの音を直接取り込む（iPhone の mp4/webm の違いで壊れないように）。
+  音の高さは自己相関で推定し、半音に変換して高さの個人差をそろえる。★は「目安」で、機械の判定は完全ではないと明記。
+  録音の終了・失敗・画面移動のたびにマイクを安全に止める（何度録音してもエラーにならない）。
+■スマホ・iPhone：マイクは https のページでしか使えない。LINE・Teams の中のブラウザはマイクが使えないことが多い →
+  「Safari（Chrome）で開く」方法を画面に表示。消音スイッチ、イヤホン推奨。
+■効果の確かめ方：語ごとのベスト★と自己チェック（「同じに聞こえた」）を保存し、一覧で見られる。
+■リスク：雑音・小さい声・ささやき声では線が出ない（その場合は★を出さず「もう一度」と表示）。★が良くても発音全体が
+  正しいとは限らない（声母・韻母は判定しない）。合成音声のお手本自体の確認は先生にお願いする。
+■前端レビュー後：軽声だけの語（的）でも形の選択肢が3つ以上。凡例の文字を14pxに。
+■成品確認後：形の誤答に、別の正しい読み・変調形（BANT）の形を使わない。1局の3つの組で同じ語が2回出ないようにした。
+-->
+<html lang="ja" data-game="08-voice">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>声調ミラー｜08</title>
+<style>:root{--bg:#f6f4ef;--card:#fff;--ink:#222;--sub:#666;--line:#d9d4c7;--pri:#2f5d8a;--pri2:#e8f0f8;--ok:#1f7a4d;--okbg:#e5f5ec;--ng:#b3261e;--ngbg:#fde9e7;--warn:#8a5a00;--warnbg:#fff4d6;--r:14px}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Noto Sans CJK JP",Meiryo,sans-serif;padding:0 0 calc(var(--fh,56px) + 12px)}
+.wrap{max-width:560px;margin:0 auto;padding:12px 14px}
+header.top{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--pri);color:#fff;position:sticky;top:0;z-index:5}
+header.top a.home{display:inline-flex;align-items:center;min-height:44px;min-width:44px;padding:0 10px;border:1px solid rgba(255,255,255,.65);border-radius:10px;color:#fff;text-decoration:none;font-size:14px;white-space:nowrap}
+header.top h1{font-size:17px;margin:0;flex:1;line-height:1.3}
+header.top .hud{font-size:14px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.screen{display:none}.screen.on{display:block;animation:fade .18s ease}
+@keyframes fade{from{opacity:.3}to{opacity:1}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin:10px 0}
+h2{font-size:19px;margin:6px 0 8px}h3{font-size:16px;margin:12px 0 6px}
+p{margin:6px 0}.sub{color:var(--sub);font-size:15px}.small{font-size:14px;color:#555}
+button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation}
+.btn{display:block;width:100%;min-height:52px;margin:8px 0;padding:10px 14px;border-radius:12px;border:1px solid var(--pri);background:var(--pri);color:#fff;font-size:17px;font-weight:600}
+.btn.ghost{background:#fff;color:var(--pri)}
+.btn.inline{display:inline-block;width:auto;min-width:44px;min-height:44px;padding:6px 14px;font-size:15px;margin:4px 4px 4px 0}
+.btn:disabled,.opt:disabled{opacity:.55;cursor:default}
+.row{display:flex;gap:8px;flex-wrap:wrap}.row>.btn{flex:1;min-width:120px}
+.opts{display:grid;gap:10px;margin:10px 0}
+.opts.two{grid-template-columns:1fr 1fr}
+.opt{display:block;width:100%;min-height:56px;text-align:left;padding:10px 12px;border-radius:12px;border:2px solid var(--line);background:#fff;font-size:16px;line-height:1.45}
+.opt.center{text-align:center}
+.opt.picked{border-color:var(--pri)}
+.opt.ok{border-color:var(--ok);background:var(--okbg)}
+.opt.ng{border-color:var(--ng);background:var(--ngbg)}
+.zh{font-family:"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Noto Sans SC","Microsoft YaHei",sans-serif}
+.zh.big{font-size:34px;line-height:1.25}.zh.mid{font-size:22px}
+.py{display:block;font-size:16px;color:#355;letter-spacing:.02em}
+.ja{display:block;font-size:16px;color:var(--sub)}
+.chk{display:inline-block;font-size:14px;line-height:1.4;padding:1px 6px;border-radius:6px;background:var(--warnbg);color:var(--warn);border:1px solid #f0d58a;white-space:nowrap;vertical-align:middle}
+.kb{display:inline-block;font-size:14px;padding:1px 6px;border-radius:6px;background:var(--pri2);color:var(--pri);border:1px solid #bcd;white-space:nowrap}
+.fb{border-radius:12px;padding:12px;margin:10px 0;font-size:15px}
+.fb.ok{background:var(--okbg);border:1px solid #9fd3b6}.fb.ng{background:var(--ngbg);border:1px solid #efb1ab}
+.fb.info{background:var(--pri2);border:1px solid #bcd}
+.audio{display:inline-flex;align-items:center;justify-content:center;gap:4px;min-width:48px;min-height:48px;padding:6px 12px;border-radius:24px;border:1px solid var(--pri);background:#fff;color:var(--pri);font-size:15px;font-weight:600}
+footer.note{position:fixed;left:0;right:0;bottom:0;background:#fffdf8;border-top:1px solid var(--line);font-size:14px;line-height:1.45;color:#555;padding:6px 10px calc(6px + env(safe-area-inset-bottom));text-align:center;z-index:6}
+#astat{min-height:0;font-size:15px;color:var(--ng)}
+.bar{height:8px;background:#e7e2d6;border-radius:4px;overflow:hidden}.bar>i{display:block;height:100%;background:var(--pri);width:0;transition:width .2s}
+table.t{width:100%;border-collapse:collapse;font-size:15px}table.t td,table.t th{border-bottom:1px solid var(--line);padding:6px 4px;text-align:left;vertical-align:top}
+.tag{display:inline-block;font-size:14px;border-radius:6px;padding:0 6px;background:#eee;color:#444}
+.shake{animation:shake .3s}@keyframes shake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+.center{text-align:center}.mt0{margin-top:0}
+.seg{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}.seg button{flex:1;min-width:90px;min-height:48px;border-radius:10px;border:2px solid var(--line);background:#fff;font-size:16px}
+.seg button[aria-pressed=true]{border-color:var(--pri);background:var(--pri2);color:var(--pri);font-weight:700}
+details{margin:8px 0}summary{cursor:pointer;min-height:44px;display:flex;align-items:center;color:var(--pri);font-weight:600}
+.toast{position:fixed;left:50%;bottom:70px;transform:translateX(-50%);background:#333;color:#fff;padding:8px 14px;border-radius:10px;font-size:14px;z-index:9;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw}
+.toast.on{opacity:.95}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* 答えたあとの大事なボタンを、スマホの画面下に固定して親指で押せるようにする（下の説明欄の上に出る） */
+.stick{position:sticky;bottom:calc(var(--fh,56px) + 6px);z-index:4;box-shadow:0 -4px 14px rgba(0,0,0,.12)}
+.stickbar{position:sticky;bottom:calc(var(--fh,56px));z-index:4;background:linear-gradient(rgba(246,244,239,0),var(--bg) 30%);padding:10px 0 2px;margin:0 -2px}
+.stickbar .btn{margin:4px 0}
+.py.hid{display:none}body.showpy .py.hid{display:block}
+/* 前端共通指摘：G.reveal() で出した「次へ」が固定フッターの下に隠れないように */
+.btn,.fb{scroll-margin-bottom:calc(var(--fh,56px) + 14px);scroll-margin-top:64px}
+
+canvas{width:100%;height:150px;display:block;background:#fbfaf6;border:1px solid #e3ddcf;border-radius:10px}
+.legend{font-size:14px;color:#666;display:flex;gap:12px;justify-content:center;margin:4px 0}
+.legend i{display:inline-block;width:18px;height:4px;border-radius:2px;vertical-align:middle;margin-right:4px}
+.rec{background:#c0392b;border-color:#c0392b}.rec.on{animation:pulse 1s infinite}@keyframes pulse{50%{opacity:.6}}
+.stars{font-size:30px;letter-spacing:4px;color:#e08a2c;min-height:40px}
+.shapes{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0}
+.shapes button{padding:6px;border-radius:12px;border:2px solid #d9d4c7;background:#fff;min-height:96px}
+.shapes button canvas{height:80px;border:0;background:transparent;pointer-events:none}
+.shapes button.ok{border-color:#1f7a4d;background:#e5f5ec}.shapes button.ng{border-color:#b3261e;background:#fde9e7}
+select{width:100%;font-size:16px;min-height:48px;border-radius:10px;padding:6px}
+</style>
+</head>
+<body>
+<header class="top"><a class="home" href="../index.html" aria-label="目次にもどる">← 目次</a><h1>声調ミラー</h1><span class="hud" id="hud"></span></header>
+<main class="wrap">
+<section class="screen on" id="title">
+  <div class="card"><h2>声の高さを「線」で比べよう</h2>
+  <p>先生の声（合成）の高さの動きと、あなたの声の動きを線で並べて表示します。</p>
+  <p class="small">録音はこの端末の中だけで使い、保存も送信もしません。静かな場所で、イヤホンがあると便利です。</p>
+  <button class="btn" id="goRec" type="button">🎤 録音して比べる</button>
+  <button class="btn ghost" id="goShape" type="button">マイクなしで練習（形当てモード）</button>
+  <div id="micmsg"></div></div>
+  <div class="card"><h3 class="mt0">これまでの記録</h3><div id="hist"></div></div>
+</section>
+<section class="screen" id="rec">
+  <div class="card center"><select id="wsel" aria-label="練習する語"></select>
+  <div id="wcard"></div></div>
+  <div class="card"><canvas id="cv" width="600" height="150" aria-label="声の高さの線"></canvas>
+  <div class="legend"><span><i style="background:#2f5d8a"></i>お手本</span><span><i style="background:#e08a2c"></i>あなた</span></div>
+  <p class="small center" id="cvmsg"></p>
+  <div class="row"><button class="btn ghost" id="pT" type="button">▶ お手本</button><button class="btn rec" id="recBtn" type="button">● 録音</button></div>
+  <div class="center"><div class="stars" id="stars"></div><p class="small" id="smsg"></p></div>
+  <button class="btn ghost" id="pMe" type="button" disabled>▶ 自分の声</button>
+  <div id="self" style="display:none"><p class="center">聞き比べて、同じ高さの動きに聞こえた？</p><div class="row"><button class="btn ghost" id="sYes" type="button">はい</button><button class="btn ghost" id="sNo" type="button">まだ</button></div></div>
+  <div id="astat"></div></div>
+  <div class="row"><button class="btn ghost" id="prev" type="button">← 前の語</button><button class="btn" id="nextW" type="button">次の語 →</button></div>
+  <button class="btn ghost" id="back1" type="button">タイトルへ</button>
+</section>
+<section class="screen" id="shape">
+  <div class="bar"><i id="sbar"></i></div>
+  <div class="card center" id="scard"></div>
+  <div class="shapes" id="sopts"></div><div id="sfb"></div>
+  <button class="btn" id="snext" type="button" style="display:none">次へ</button>
+</section>
+<section class="screen" id="sres">
+  <div class="card center"><h2>形当て 結果</h2><div id="sscore"></div></div>
+  <div class="card" id="smiss"></div>
+  <button class="btn" id="sagain" type="button">もう一度</button>
+  <button class="btn ghost" id="back2" type="button">タイトルへ</button>
+</section>
+</main>
+<footer class="note">音声：先生の声をもとに合成</footer>
+<script>
+'use strict';
+/* 共通部品（各ファイルに同じものを埋め込み。外部ライブラリなし） */
+const G = (() => {
+  const GAME = document.documentElement.dataset.game || 'x';
+  const KEY = 'cngame.' + GAME; // 合成版の保存キー
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  function h(tag, props, ...kids) {
+    const e = document.createElement(tag);
+    for (const [k, v] of Object.entries(props || {})) {
+      if (v == null || v === false) continue;
+      if (k === 'class') e.className = v; else if (k === 'text') e.textContent = v; else if (k === 'html') e.innerHTML = v;
+      else if (k === 'style') e.style.cssText = v;
+      else if (k.startsWith('on') && typeof v === 'function') e.addEventListener(k.slice(2), v);
+      else e.setAttribute(k, v === true ? '' : v);
+    }
+    for (const c of kids.flat(9)) { if (c == null || c === false) continue; e.append(c.nodeType ? c : document.createTextNode(String(c))); }
+    return e;
+  }
+  // append(…, null) で「null」と表示されないように（null / false は飛ばす）
+  { const ap = Element.prototype.append; Element.prototype.append = function (...a) { return ap.apply(this, a.filter(x => x != null && x !== false)); }; }
+  let rnd = Math.random;
+  function seeded(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  function shuffle(a, r = rnd) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+  function pick(a, n, r = rnd) { return shuffle(a, r).slice(0, n); }
+  // ---- 保存（localStorage のみ。使えない環境でも遊べる） ----
+  let mem = {};
+  function load() { try { const s = localStorage.getItem(KEY); return s ? JSON.parse(s) : {}; } catch (e) { return mem; } }
+  function save(o) { mem = o; try { localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) { } }
+  // ---- 画面切り替え ----
+  function show(id) { $$('.screen').forEach(s => s.classList.toggle('on', s.id === id)); window.scrollTo(0, 0); }
+  // ---- タイマー（重ねがけ防止：新しい回の前に必ず clearAll） ----
+  const T = new Set();
+  function after(ms, fn) { const id = setTimeout(() => { T.delete(id); fn(); }, ms); T.add(id); return id; }
+  function every(ms, fn) { const id = setInterval(fn, ms); T.add(-id); return id; }
+  function clearAll() { for (const id of T) { if (id < 0) clearInterval(-id); else clearTimeout(id); } T.clear(); }
+  // ---- 音声（1つの Audio を使い回す。失敗は画面内に表示、alert は使わない） ----
+  const au = new Audio(); au.preload = 'auto';
+  let playSeq = 0;
+  function play(url) {
+    const seq = ++playSeq; const st = $('#astat');
+    if (st) st.textContent = '';
+    return new Promise(res => {
+      if (!url) return res(false);
+      try { au.pause(); } catch (e) { }
+      au.onended = () => { if (seq === playSeq) res(true); };
+      au.onerror = () => { if (seq === playSeq) { if (st) st.textContent = '音声を再生できませんでした。通信状況を確認して、もう一度押してください。'; fail(url); res(false); } };
+      au.src = url;
+      const p = au.play();
+      if (p && p.catch) p.catch(err => { if (seq !== playSeq) return; if (err && err.name === 'AbortError') return; if (st) st.textContent = '音声を再生できませんでした（' + (err && err.name === 'NotAllowedError' ? 'もう一度ボタンを押してください' : '通信状況を確認してください') + '）。'; fail(url); res(false); });
+    });
+  }
+  // 再生できなかったことを各ゲームに知らせる（時間制のゲームはタイマーを止めて、文字のヒントを出す）
+  function fail(url) { try { window.dispatchEvent(new CustomEvent('audiofail', { detail: url })); } catch (e) { } }
+  function stopAudio() { playSeq++; try { au.pause(); } catch (e) { } }
+  function audioBtn(url, label = '▶ 聞く') { return h('button', { class: 'audio', type: 'button', 'aria-label': '音声を聞く', onclick: () => play(url) }, label); }
+  // ---- 表示部品 ----
+  const zh = (t, cls = '') => h('span', { class: 'zh ' + cls, lang: 'zh-CN' }, t);
+  const py = t => h('span', { class: 'py', lang: 'zh-Latn-pinyin' }, t);
+  const ja = t => h('span', { class: 'ja' }, t);
+  // 中級・上級用：ピンインは最初は隠しておき、「ピンイン」ボタンで出せる（中国語には必ずピンインが付いている状態にする）
+  const pyh = t => h('span', { class: 'py hid', lang: 'zh-Latn-pinyin' }, t);
+  function pyBtn() { const b = h('button', { class: 'btn inline ghost pybtn', type: 'button', 'aria-pressed': String(document.body.classList.contains('showpy')) }, document.body.classList.contains('showpy') ? 'ピンインを隠す' : 'ピンインを表示'); b.onclick = () => { const on = document.body.classList.toggle('showpy'); $$('.pybtn').forEach(x => { x.textContent = on ? 'ピンインを隠す' : 'ピンインを表示'; x.setAttribute('aria-pressed', String(on)); }); }; return b; }
+  const chk = () => h('span', { class: 'chk' }, '⚠先生確認');
+  const kb = t => h('span', { class: 'kb' }, t);
+  function plain(p) { return p.normalize('NFD').replace(/[\u0300-\u0304\u0306\u0307\u0309-\u036f]/g, '').normalize('NFC'); }
+  let toastT = 0;
+  function toast(m) { let t = $('.toast'); if (!t) { t = h('div', { class: 'toast', role: 'status' }); document.body.append(t); } t.textContent = m; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 1800); }
+  // ---- 連打対策：1問につき1回だけ受け付ける ----
+  function guard() { let used = false; const born = performance.now(); return fn => (...a) => { if (used || performance.now() - born < 300) return; used = true; fn(...a); }; } // 表示直後0.3秒のタップは前の画面の連打とみなして無視
+  function lock(box) { $$('button', box).forEach(b => b.disabled = true); }
+  const today = (d = new Date()) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  // ---- 連打対策：前のタップの時点で見えていなかった要素への 0.35 秒以内のタップは無視（画面が変わった直後の指の2回目） ----
+  let lastTap = -1e9, seenVis = new WeakMap();
+  document.addEventListener('click', e => {
+    if (!e.isTrusted) return;
+    const SEL = 'button,a,[role=button],.opt,.part,.tile,.hole', now = performance.now(), el = e.target.closest(SEL);
+    if (!el) return; // ボタン以外のタップは対象外（全要素を調べないので軽い）
+    if (now - lastTap < 350 && seenVis.get(el) !== true) { e.stopPropagation(); e.preventDefault(); return; }
+    lastTap = now; seenVis = new WeakMap(); for (const x of document.querySelectorAll(SEL)) seenVis.set(x, x.offsetParent !== null || x.getClientRects().length > 0);
+  }, true);
+  // 答えたあと、フィードバックや「次へ」が画面に入るようにスクロール（動きを減らす設定なら一瞬で）
+  const reduce = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function reveal(el, block = 'nearest') { if (!el) return; try { el.scrollIntoView({ block, behavior: reduce() ? 'auto' : 'smooth' }); } catch (e) { el.scrollIntoView(); } } // 同期で呼ぶ（rAF だと直後のタップに間に合わないことがある）
+  // 下の説明欄の高さを CSS 変数 --fh に入れる（説明欄が2行になってもボタンが隠れない）
+  function fh() { const f = document.querySelector('footer.note'); document.documentElement.style.setProperty('--fh', (f ? f.offsetHeight : 0) + 'px'); }
+  addEventListener('resize', fh); document.addEventListener('DOMContentLoaded', fh); setTimeout(fh, 0);
+  // 声調の誤答選択肢に使わない声調（その字の別の正しい読み・変調形）。例：好 hào、和 hè、喝 hè、读 dù、不 bú/bù、都 dū、的 dí/dì
+  const BANT = { 好: [4], 和: [4], 喝: [4], 读: [4], 不: [2, 4], 都: [1], 的: [2, 4], 少: [4], 分: [4], 作: [1], 兴: [1], 打: [2], 八: [2], 个: [3], 语: [4] };
+  const banTone = (hz, k, t) => { const c = [...hz][k]; return !!(BANT[c] && BANT[c].includes(t)); };
+  const test = /[?&]test=1/.test(location.search);
+  return { GAME, $, $$, h, shuffle, pick, seeded, setRand: f => rnd = f, rand: () => rnd(), load, save, show, after, every, clearAll, play, stopAudio, audioBtn, zh, py, ja, chk, kb, plain, toast, guard, lock, today, test, reveal, reduce, pyh, pyBtn, BANT, banTone };
+})();
+
+const WORDS = [
+ {
+  "hanzi": "爱",
+  "pinyin": "ài",
+  "pos": "動",
+  "ja": "愛する、（行い、状態を）好む",
+  "audio": "https://tcll1988.github.io/HSK/audio/20/%E7%88%B1.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "八",
+  "pinyin": "bā",
+  "pos": "数",
+  "ja": "八",
+  "audio": "https://tcll1988.github.io/HSK/audio/06/%E5%85%AB.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "爸爸",
+  "pinyin": "bàba",
+  "pos": "名",
+  "ja": "お父さん",
+  "audio": "https://tcll1988.github.io/HSK/audio/37/%E7%88%B8%E7%88%B8.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "北京",
+  "pinyin": "Běijīng",
+  "pos": "名固",
+  "ja": "北京",
+  "audio": "https://tcll1988.github.io/HSK/audio/18/%E5%8C%97%E4%BA%AC.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "杯子",
+  "pinyin": "bēizi",
+  "pos": "名",
+  "ja": "コップ、さかずき",
+  "audio": "https://tcll1988.github.io/HSK/audio/82/%E6%9D%AF%E5%AD%90.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "本",
+  "pinyin": "běn",
+  "pos": "量",
+  "ja": "…冊（書籍・ノートを数える）",
+  "audio": "https://tcll1988.github.io/HSK/audio/59/%E6%9C%AC.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "不",
+  "pinyin": "bù",
+  "pos": "副",
+  "ja": "いいえ、…しない、…ではない",
+  "audio": "https://tcll1988.github.io/HSK/audio/80/%E4%B8%8D.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "不客气",
+  "pinyin": "búkèqi",
+  "pos": "他",
+  "ja": "どういたしまして",
+  "audio": "https://tcll1988.github.io/HSK/audio/42/%E4%B8%8D%E5%AE%A2%E6%B0%94.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "菜",
+  "pinyin": "cài",
+  "pos": "名",
+  "ja": "料理、おかず",
+  "audio": "https://tcll1988.github.io/HSK/audio/43/%E8%8F%9C.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "茶",
+  "pinyin": "chá",
+  "pos": "名",
+  "ja": "お茶",
+  "audio": "https://tcll1988.github.io/HSK/audio/89/%E8%8C%B6.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "吃",
+  "pinyin": "chī",
+  "pos": "動",
+  "ja": "食べる",
+  "audio": "https://tcll1988.github.io/HSK/audio/62/%E5%90%83.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "出租车",
+  "pinyin": "chūzūchē",
+  "pos": "名",
+  "ja": "タクシー",
+  "audio": "https://tcll1988.github.io/HSK/audio/00/%E5%87%BA%E7%A7%9F%E8%BD%A6.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "大",
+  "pinyin": "dà",
+  "pos": "形",
+  "ja": "大きい、年長である",
+  "audio": "https://tcll1988.github.io/HSK/audio/54/%E5%A4%A7.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "打电话",
+  "pinyin": "dǎdiànhuà",
+  "pos": "動",
+  "ja": "電話をかける",
+  "audio": "https://tcll1988.github.io/HSK/audio/48/%E6%89%93%E7%94%B5%E8%AF%9D.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "的",
+  "pinyin": "de",
+  "pos": "助",
+  "ja": "助詞（連体修飾・所有）",
+  "audio": "https://tcll1988.github.io/HSK/audio/43/%E7%9A%84.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "点",
+  "pinyin": "diǎn",
+  "pos": "量",
+  "ja": "…時",
+  "audio": "https://tcll1988.github.io/HSK/audio/00/%E7%82%B9.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "电脑",
+  "pinyin": "diànnǎo",
+  "pos": "名",
+  "ja": "パソコン",
+  "audio": "https://tcll1988.github.io/HSK/audio/83/%E7%94%B5%E8%84%91.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "电视",
+  "pinyin": "diànshì",
+  "pos": "名",
+  "ja": "テレビ",
+  "audio": "https://tcll1988.github.io/HSK/audio/74/%E7%94%B5%E8%A7%86.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "电影",
+  "pinyin": "diànyǐng",
+  "pos": "名",
+  "ja": "映画",
+  "audio": "https://tcll1988.github.io/HSK/audio/91/%E7%94%B5%E5%BD%B1.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "东西",
+  "pinyin": "dōngxi",
+  "pos": "名",
+  "ja": "品物",
+  "audio": "https://tcll1988.github.io/HSK/audio/64/%E4%B8%9C%E8%A5%BF.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "都",
+  "pinyin": "dōu",
+  "pos": "副",
+  "ja": "みな、すべて",
+  "audio": "https://tcll1988.github.io/HSK/audio/76/%E9%83%BD.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "读",
+  "pinyin": "dú",
+  "pos": "動",
+  "ja": "音読する、（学校で）勉強する",
+  "audio": "https://tcll1988.github.io/HSK/audio/02/%E8%AF%BB.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "对不起",
+  "pinyin": "duìbuqǐ",
+  "pos": "他",
+  "ja": "すみません",
+  "audio": "https://tcll1988.github.io/HSK/audio/88/%E5%AF%B9%E4%B8%8D%E8%B5%B7.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "多",
+  "pinyin": "duō",
+  "pos": "形",
+  "ja": "多い",
+  "audio": "https://tcll1988.github.io/HSK/audio/97/%E5%A4%9A.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "多少",
+  "pinyin": "duōshǎo",
+  "pos": "代",
+  "ja": "いくら（数量を問う）、いくらか（不定の数量）",
+  "audio": "https://tcll1988.github.io/HSK/audio/44/%E5%A4%9A%E5%B0%91.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "二",
+  "pinyin": "èr",
+  "pos": "数",
+  "ja": "二（単独で）",
+  "audio": "https://tcll1988.github.io/HSK/audio/63/%E4%BA%8C.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "儿子",
+  "pinyin": "érzi",
+  "pos": "名",
+  "ja": "息子",
+  "audio": "https://tcll1988.github.io/HSK/audio/86/%E5%84%BF%E5%AD%90.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "饭馆",
+  "pinyin": "fànguǎn",
+  "pos": "名",
+  "ja": "レストラン",
+  "audio": "https://tcll1988.github.io/HSK/audio/26/%E9%A5%AD%E9%A6%86.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "飞机",
+  "pinyin": "fēijī",
+  "pos": "名",
+  "ja": "飛行機",
+  "audio": "https://tcll1988.github.io/HSK/audio/45/%E9%A3%9E%E6%9C%BA.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "分钟",
+  "pinyin": "fēnzhōng",
+  "pos": "名",
+  "ja": "…分間",
+  "audio": "https://tcll1988.github.io/HSK/audio/70/%E5%88%86%E9%92%9F.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "高兴",
+  "pinyin": "gāoxìng",
+  "pos": "形",
+  "ja": "うれしい",
+  "audio": "https://tcll1988.github.io/HSK/audio/85/%E9%AB%98%E5%85%B4.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "个",
+  "pinyin": "gè",
+  "pos": "量",
+  "ja": "…個（広く色々な名詞に用いる）",
+  "audio": "https://tcll1988.github.io/HSK/audio/21/%E4%B8%AA.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "工作",
+  "pinyin": "gōngzuò",
+  "pos": "動",
+  "ja": "仕事をする",
+  "audio": "https://tcll1988.github.io/HSK/audio/28/%E5%B7%A5%E4%BD%9C.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "狗",
+  "pinyin": "gǒu",
+  "pos": "名",
+  "ja": "犬",
+  "audio": "https://tcll1988.github.io/HSK/audio/22/%E7%8B%97.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "汉语",
+  "pinyin": "Hànyǔ",
+  "pos": "名",
+  "ja": "中国語",
+  "audio": "https://tcll1988.github.io/HSK/audio/75/%E6%B1%89%E8%AF%AD.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "好",
+  "pinyin": "hǎo",
+  "pos": "形",
+  "ja": "よい、申し分ない",
+  "audio": "https://tcll1988.github.io/HSK/audio/52/%E5%A5%BD.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "和",
+  "pinyin": "hé",
+  "pos": "介",
+  "ja": "…と",
+  "audio": "https://tcll1988.github.io/HSK/audio/83/%E5%92%8C.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "喝",
+  "pinyin": "hē",
+  "pos": "動",
+  "ja": "飲む",
+  "audio": "https://tcll1988.github.io/HSK/audio/00/%E5%96%9D.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "很",
+  "pinyin": "hěn",
+  "pos": "副",
+  "ja": "たいへん、とても",
+  "audio": "https://tcll1988.github.io/HSK/audio/83/%E5%BE%88.mp3?v=20261020-voice-v2"
+ },
+ {
+  "hanzi": "回",
+  "pinyin": "huí",
+  "pos": "量",
+  "ja": "…回",
+  "audio": "https://tcll1988.github.io/HSK/audio/45/%E5%9B%9E.mp3?v=20261020-voice-v2"
+ }
+];
+const WORD_SYL = {"爱": [["ài", 4]], "八": [["bā", 1]], "爸爸": [["bà", 4], ["ba", 0]], "北京": [["Běi", 3], ["jīng", 1]], "杯子": [["bēi", 1], ["zi", 0]], "本": [["běn", 3]], "不": [["bù", 4]], "不客气": [["bú", 2], ["kè", 4], ["qi", 0]], "菜": [["cài", 4]], "茶": [["chá", 2]], "吃": [["chī", 1]], "出租车": [["chū", 1], ["zū", 1], ["chē", 1]], "大": [["dà", 4]], "打电话": [["dǎ", 3], ["diàn", 4], ["huà", 4]], "的": [["de", 0]], "点": [["diǎn", 3]], "电脑": [["diàn", 4], ["nǎo", 3]], "电视": [["diàn", 4], ["shì", 4]], "电影": [["diàn", 4], ["yǐng", 3]], "东西": [["dōng", 1], ["xi", 0]], "都": [["dōu", 1]], "读": [["dú", 2]], "对不起": [["duì", 4], ["bu", 0], ["qǐ", 3]], "多": [["duō", 1]], "多少": [["duō", 1], ["shǎo", 3]], "二": [["èr", 4]], "儿子": [["ér", 2], ["zi", 0]], "饭馆": [["fàn", 4], ["guǎn", 3]], "飞机": [["fēi", 1], ["jī", 1]], "分钟": [["fēn", 1], ["zhōng", 1]], "高兴": [["gāo", 1], ["xìng", 4]], "个": [["gè", 4]], "工作": [["gōng", 1], ["zuò", 4]], "狗": [["gǒu", 3]], "汉语": [["Hàn", 4], ["yǔ", 3]], "好": [["hǎo", 3]], "和": [["hé", 2]], "喝": [["hē", 1]], "很": [["hěn", 3]], "回": [["huí", 2]]};
+const tones = w => WORD_SYL[w.hanzi].map(s => s[1]);
+const ORDER = WORDS.slice().sort((a, b) => { const k = w => { const t = tones(w); return t.length === 1 ? 0 : (t.length === 2 && !t.includes(0)) ? 1 : 2; }; return k(a) - k(b); });
+const st = G.load(); st.best = st.best || {}; st.self = st.self || {};
+// ---------- 音の高さの推定（YIN） ----------
+function down(data, sr) { const f = Math.max(1, Math.round(sr / 11025)); const n = Math.floor(data.length / f), o = new Float32Array(n); for (let i = 0; i < n; i++) { let s = 0; for (let k = 0; k < f; k++) s += data[i * f + k]; o[i] = s / f; } return { d: o, sr: sr / f }; }
+function track(raw, srIn) {
+  const { d, sr } = down(raw, srIn), W = Math.round(sr * 0.03), hop = Math.round(sr * 0.01), tmin = Math.floor(sr / 450), tmax = Math.ceil(sr / 70);
+  const frames = []; for (let s = 0; s + W + tmax < d.length; s += hop) frames.push(s);
+  const rms = frames.map(s => { let e = 0; for (let i = 0; i < W; i++) e += d[s + i] * d[s + i]; return Math.sqrt(e / W); });
+  const mx = Math.max(0, ...rms), thr = Math.max(0.005, mx * 0.1);
+  const df = new Float32Array(tmax + 2);
+  return frames.map((s, fi) => {
+    if (rms[fi] < thr) return null;
+    for (let t = 1; t <= tmax + 1; t++) { let x = 0; for (let i = 0; i < W; i++) { const v = d[s + i] - d[s + i + t]; x += v * v; } df[t] = x; }
+    let run = 0; const cm = new Float32Array(tmax + 2); cm[0] = 1;
+    for (let t = 1; t <= tmax + 1; t++) { run += df[t]; cm[t] = run ? df[t] * t / run : 1; }
+    let T = -1; for (let t = tmin; t <= tmax; t++) { if (cm[t] < 0.2) { while (t + 1 <= tmax && cm[t + 1] < cm[t]) t++; T = t; break; } }
+    if (T < 0) { let b = 1, bt = -1; for (let t = tmin; t <= tmax; t++) if (cm[t] < b) { b = cm[t]; bt = t; } if (b > 0.35) return null; T = bt; }
+    const a = cm[T - 1], b = cm[T], g = cm[T + 1], den = a - 2 * b + g; const Tf = den ? T + 0.5 * (a - g) / den : T;
+    return sr / Tf;
+  });
+}
+const med = a => { const s = a.slice().sort((x, y) => x - y); return s[s.length >> 1]; };
+function contour(f0) {
+  let v = f0.map(x => x ? 12 * Math.log2(x) : null);
+  // 主な発話区間：一番声の多いところから、0.15秒以内のすき間を許して広げる
+  const idx = v.map((x, i) => x === null ? -1 : i).filter(i => i >= 0); if (idx.length < 5) return null;
+  let segs = [], a = idx[0], b = idx[0]; for (const i of idx.slice(1)) { if (i - b > 15) { segs.push([a, b]); a = i; } b = i; } segs.push([a, b]);
+  const cnt = s => v.slice(s[0], s[1] + 1).filter(x => x !== null).length; const sg = segs.sort((p, q) => cnt(q) - cnt(p))[0];
+  v = v.slice(sg[0], sg[1] + 1);
+  const ok = v.filter(x => x !== null); if (ok.length < 5) return null;
+  const m0 = med(ok); v = v.map(x => { if (x === null) return null; while (x - m0 > 7) x -= 12; if (m0 - x > 10) return null; return x - m0; });
+  // 外れ値を除く（前後5点の中央値から4半音以上ずれた点）
+  v = v.map((x, i) => { if (x === null) return null; const w = v.slice(Math.max(0, i - 3), i + 4).filter(y => y !== null); return Math.abs(x - med(w)) > 4 ? null : x; });
+  const first = v.findIndex(x => x !== null); let last = v.length - 1; while (last > 0 && v[last] === null) last--; v = v.slice(first, last + 1);
+  if (v.filter(x => x !== null).length < 5) return null;
+  if (v.length >= 15) { const cut = Math.floor(v.length * 0.08); v = v.slice(cut, v.length - cut); }
+  { const f = v.findIndex(x => x !== null); let l = v.length - 1; while (l > 0 && v[l] === null) l--; v = v.slice(f, l + 1); }
+  for (let i = 0; i < v.length; i++) if (v[i] === null) { let j = i; while (j < v.length && v[j] === null) j++; const p = v[i - 1], q = j < v.length ? v[j] : p; for (let k = i; k < j; k++) v[k] = p + (q - p) * (k - i + 1) / (j - i + 1); i = j; }
+  const sm = v.map((_, i) => { const w = v.slice(Math.max(0, i - 1), i + 2); return w.reduce((s, x) => s + x, 0) / w.length; });
+  const N = 40; return Array.from({ length: N }, (_, i) => { const p = i * (sm.length - 1) / (N - 1), a = Math.floor(p), f = p - a; return sm[a] * (1 - f) + sm[Math.min(a + 1, sm.length - 1)] * f; });
+}
+function compare(t, u, flat) {
+  const mean = a => a.reduce((s, x) => s + x, 0) / a.length; const mt = mean(t), mu = mean(u); const T = t.map(x => x - mt), U = u.map(x => x - mu);
+  const d = mean(T.map((x, i) => Math.abs(x - U[i]))), range = Math.max(...t) - Math.min(...t);
+  const cov = mean(T.map((x, i) => x * U[i])), sd = a => Math.sqrt(mean(a.map(x => x * x))); const r = cov / (sd(T) * sd(U) + 1e-9);
+  let stars; const ur = Math.max(...u) - Math.min(...u); if (flat || range < 1.2) stars = (d < 1.2 && ur <= 3) ? 3 : (d < 2 && ur < 4.5) ? 2 : 1; else stars = r > 0.75 ? 3 : r > 0.4 ? 2 : 1;
+  return { stars, r: +r.toFixed(2), d: +d.toFixed(2), range: +range.toFixed(1) };
+}
+// ---------- お手本の解析 ----------
+const tCache = {};
+async function teacher(w) { // { c: 線, ideal: 標準の形で代用したか }
+  if (tCache[w.hanzi]) return tCache[w.hanzi];
+  let c = null;
+  try {
+    const buf = await (await fetch(w.audio)).arrayBuffer();
+    const OC = window.OfflineAudioContext || window.webkitOfflineAudioContext; const oc = new OC(1, 44100, 44100);
+    const ab = await new Promise((res, rej) => { const p = oc.decodeAudioData(buf, res, rej); if (p && p.then) p.then(res, rej); });
+    c = contour(track(ab.getChannelData(0), ab.sampleRate));
+  } catch (e) { c = null; }
+  const ts = tones(w), id = idealPts(ts), allFlat = ts.every(t => t === 1);
+  let ideal = false;
+  if (!c) { c = id; ideal = true; } // 解析できなければ標準の形
+  else if (!allFlat) { const r = compare(id, c, false).r; if (!(r > 0.2)) { c = id; ideal = true; } } // 声調の向きと合わない線は使わない
+  return (tCache[w.hanzi] = { c, ideal });
+}
+function idealPts(ts) { const p = shapePts(ts).filter(x => x !== null), N = 40; return Array.from({ length: N }, (_, i) => { const q = i * (p.length - 1) / (N - 1), a = Math.floor(q), f = q - a; return p[a] * (1 - f) + p[Math.min(a + 1, p.length - 1)] * f; }); }
+
+// ---------- 描画 ----------
+function draw(cv, lines, opt = {}) {
+  const dpr = window.devicePixelRatio || 1, W = cv.clientWidth || 300, H = cv.clientHeight || 150; cv.width = W * dpr; cv.height = H * dpr;
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+  const all = lines.flatMap(l => l.pts || []), R = opt.range || Math.max(5, Math.min(12, Math.max(0, ...all.map(Math.abs)) + 1.5)), pad = 12, y = v => H / 2 - Math.max(-R, Math.min(R, v)) / R * (H / 2 - pad);
+  if (!opt.bare) { g.strokeStyle = '#ece6d8'; g.lineWidth = 1; [-6, 0, 6].forEach(v => { g.beginPath(); g.moveTo(0, y(v)); g.lineTo(W, y(v)); g.stroke(); }); }
+  lines.forEach(({ pts, color, width }) => { if (!pts) return; g.strokeStyle = color; g.lineWidth = width || 4; g.lineCap = 'round'; g.lineJoin = 'round'; g.beginPath(); pts.forEach((v, i) => { const x = pad + i * (W - 2 * pad) / (pts.length - 1); i ? g.lineTo(x, y(v)) : g.moveTo(x, y(v)); }); g.stroke(); });
+}
+// ---------- マイク ----------
+let ctx = null, stream = null, proc = null, srcN = null, chunks = [], recording = false, lastRec = null, recW = null;
+function stopMic() { try { if (proc) proc.disconnect(); } catch (e) {} try { if (srcN) srcN.disconnect(); } catch (e) {} proc = srcN = null; if (stream) { try { stream.getTracks().forEach(t => t.stop()); } catch (e) {} } stream = null; recording = false; }
+window.addEventListener('pagehide', stopMic);
+function micHelp(err) {
+  const name = err && err.name, box = G.$('#micmsg'); box.innerHTML = '';
+  const why = name === 'NotAllowedError' ? 'マイクの使用が許可されていません。' : name === 'NotFoundError' ? 'マイクが見つかりません。' : !window.isSecureContext ? 'このページの開き方ではマイクが使えません（https のページで開いてください）。' : 'このブラウザではマイクが使えませんでした。';
+  box.append(G.h('div', { class: 'fb ng' }, G.h('b', {}, why),
+    G.h('p', { class: 'small' }, '・iPhone（Safari）：アドレスバー左の「ぁあ」→「Webサイトの設定」→「マイク」→「許可」。または 設定アプリ →「Safari」→「マイク」。'),
+    G.h('p', { class: 'small' }, '・LINE・Teams の中で開いた場合：右上（または下）の「…」→「ブラウザで開く」で Safari / Chrome で開いてください。'),
+    G.h('p', { class: 'small' }, '・Android（Chrome）：アドレスバーの鍵マーク →「権限」→「マイク」。'),
+    G.h('button', { class: 'btn', type: 'button', onclick: startShape }, 'マイクなしで練習する（形当てモード）')));
+}
+async function ensureMic() {
+  if (!ctx) { const AC = window.AudioContext || window.webkitAudioContext; ctx = new AC(); }
+  if (ctx.state === 'suspended') await ctx.resume();
+  if (!stream) { if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw Object.assign(new Error('nomedia'), { name: 'NotSupportedError' }); stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false } }); }
+}
+let recT0 = -1e9;
+async function startRec() {
+  if (recording) { if (performance.now() - recT0 < 600) return; return stopRec(); } // 連打で始めてすぐ止まらないように
+  const btn = G.$('#recBtn'); btn.disabled = true;
+  try { await ensureMic(); } catch (e) { btn.disabled = false; stopMic(); G.show('title'); micHelp(e); return; }
+  G.stopAudio(); chunks = []; recording = true; recW = cur(); recT0 = performance.now();
+  srcN = ctx.createMediaStreamSource(stream); proc = (ctx.createScriptProcessor || ctx.createJavaScriptNode).call(ctx, 4096, 1, 1);
+  const mute = ctx.createGain(); mute.gain.value = 0;
+  proc.onaudioprocess = e => { if (recording) chunks.push(new Float32Array(e.inputBuffer.getChannelData(0))); };
+  srcN.connect(proc); proc.connect(mute); mute.connect(ctx.destination);
+  btn.disabled = false; btn.textContent = '■ 止める'; btn.classList.add('on'); G.$('#smsg').textContent = '話してください…（3秒で自動で止まります）'; G.$('#stars').textContent = '';
+  const t0 = performance.now(); G.every(100, () => { const left = Math.max(0, 3 - (performance.now() - t0) / 1000); G.$('#hud').textContent = '録音 ' + left.toFixed(1) + '秒'; if (left <= 0) stopRec(); });
+}
+function stopRec() {
+  if (!recording) return; recording = false; G.clearAll(); G.$('#hud').textContent = '';
+  try { proc.disconnect(); srcN.disconnect(); } catch (e) {} proc = srcN = null;
+  const btn = G.$('#recBtn'); btn.textContent = '● もう一度録音'; btn.classList.remove('on');
+  const n = chunks.reduce((s, c) => s + c.length, 0), all = new Float32Array(n); let o = 0; chunks.forEach(c => { all.set(c, o); o += c.length; });
+  lastRec = { data: all, sr: ctx.sampleRate }; G.$('#pMe').disabled = n === 0;
+  if (recW !== cur()) return; analyse();
+}
+async function analyse() {
+  const w = cur(); let T = null; try { T = await teacher(w); } catch (e) {} const tc = T && T.c;
+  const uc = lastRec && lastRec.data.length ? contour(track(lastRec.data, lastRec.sr)) : null;
+  draw(G.$('#cv'), [{ pts: tc, color: '#2f5d8a', width: 5 }, { pts: uc, color: '#e08a2c', width: 4 }]);
+  if (!uc) { G.$('#stars').textContent = ''; G.$('#smsg').textContent = '声がうまく取れませんでした。もう少し大きな声で、マイクに近づいてもう一度。'; G.$('#self').style.display = 'none'; return; }
+  if (!tc) { G.$('#smsg').textContent = 'お手本の線が出せないため、★は出せません。耳で聞き比べてください。'; G.$('#self').style.display = 'block'; return; }
+  const r = compare(tc, uc, tones(w).every(t => t === 1)); G.$('#stars').textContent = '★'.repeat(r.stars) + '☆'.repeat(3 - r.stars);
+  G.$('#smsg').textContent = ['', '線の形がかなり違います。お手本をもう一度聞いてみよう。', '近いです！ 高さの動きをもう少し大きく。', 'お手本とよく似ています！'][r.stars] + '（★は機械による目安です）';
+  st.best[w.hanzi] = Math.max(st.best[w.hanzi] || 0, r.stars); G.save(st); G.$('#self').style.display = 'block';
+  if (G.test) window.__last = r;
+}
+G.$('#pMe').onclick = () => { if (!lastRec || !ctx) return; const b = ctx.createBuffer(1, lastRec.data.length, lastRec.sr); b.getChannelData(0).set(lastRec.data); const s = ctx.createBufferSource(); s.buffer = b; s.connect(ctx.destination); s.start(); };
+G.$('#sYes').onclick = () => selfChk(true); G.$('#sNo').onclick = () => selfChk(false);
+function selfChk(y) { const w = cur(); st.self[w.hanzi] = y; G.save(st); G.$('#self').style.display = 'none'; G.toast(y ? '記録しました。次の語へ進もう！' : 'お手本を聞いて、もう一度録音してみよう'); }
+// ---------- 練習画面 ----------
+let wi = 0; const cur = () => ORDER[wi];
+ORDER.forEach((w, i) => G.$('#wsel').append(G.h('option', { value: String(i) }, `${w.hanzi}  ${w.pinyin}`)));
+G.$('#wsel').onchange = e => { wi = +e.target.value; showWord(); };
+async function showWord() {
+  if (recording) stopRec(); G.clearAll(); G.$('#hud').textContent = ''; lastRec = null;
+  const w = cur(); G.$('#wsel').value = String(wi);
+  const c = G.$('#wcard'); c.innerHTML = ''; c.append(G.zh(w.hanzi, 'big'), G.h('p', { lang: 'zh-Latn-pinyin', style: 'font-size:20px;margin:2px 0' }, w.pinyin), G.ja(w.ja + (st.best[w.hanzi] ? `　ベスト ${'★'.repeat(st.best[w.hanzi])}` : '')));
+  G.$('#stars').textContent = ''; G.$('#smsg').textContent = '「▶お手本」を聞いてから「●録音」を押して読んでみよう。'; G.$('#self').style.display = 'none'; G.$('#pMe').disabled = true; G.$('#recBtn').textContent = '● 録音';
+  G.$('#cvmsg').textContent = 'お手本の線を準備中…'; draw(G.$('#cv'), []);
+  try { const T = await teacher(w); if (cur() !== w) return; draw(G.$('#cv'), [{ pts: T.c, color: '#2f5d8a', width: 5 }]); G.$('#cvmsg').textContent = T.ideal ? '青い線＝声調の標準の形（この音声からはうまく線が取れなかったため）' : '青い線＝お手本の声の高さの動き（上が高い）'; }
+  catch (e) { if (cur() === w) G.$('#cvmsg').textContent = 'お手本の線を出せませんでした（通信を確認してください）。'; }
+  if (G.test) window.__t = { word: w.hanzi };
+}
+G.$('#pT').onclick = () => G.play(cur().audio);
+G.$('#recBtn').onclick = startRec;
+G.$('#nextW').onclick = () => { wi = (wi + 1) % ORDER.length; showWord(); };
+G.$('#prev').onclick = () => { wi = (wi - 1 + ORDER.length) % ORDER.length; showWord(); };
+G.$('#goRec').onclick = async () => {
+  G.$('#micmsg').innerHTML = ''; const b = G.$('#goRec'); b.disabled = true;
+  try { await ensureMic(); } catch (e) { b.disabled = false; stopMic(); micHelp(e); return; }
+  b.disabled = false; G.show('rec'); showWord();
+};
+function toTitle() { if (recording) stopRec(); stopMic(); G.clearAll(); G.stopAudio(); G.$('#hud').textContent = ''; renderHist(); G.show('title'); }
+G.$('#back1').onclick = toTitle; G.$('#back2').onclick = toTitle;
+function renderHist() {
+  const box = G.$('#hist'); box.innerHTML = ''; const ks = Object.keys(st.best);
+  if (!ks.length && !st.shape) return box.append(G.h('p', { class: 'small' }, 'まだ記録がありません。'));
+  if (ks.length) box.append(G.h('p', {}, ks.map(k => `${k} ${'★'.repeat(st.best[k])}${st.self[k] ? '✓' : ''}`).join('　')));
+  if (st.shape) box.append(G.h('p', { class: 'small' }, `形当てモード ベスト：${st.shape} / 10`));
+}
+// ---------- 形当てモード（マイクなし） ----------
+const SHAPE = { 1: [4, 4], 2: [-1, 4], 3: [-2, -5, -1.5], 4: [4.5, -4.5], 0: [-1.5, -2] }, SHAPE3 = [-2, -5];
+function shapePts(ts) { // 声調ごとの型をつないだ線（2音節以上の非語末の第3声は「半3声」）
+  const segs = ts.map((t, i) => (t === 3 && i < ts.length - 1) ? SHAPE3 : SHAPE[t]); const pts = [];
+  segs.forEach((s, i) => { const n = ts[i] === 0 ? 5 : 12; for (let k = 0; k < n; k++) { const p = k / (n - 1) * (s.length - 1), a = Math.floor(p), f = p - a; pts.push(s[a] * (1 - f) + (s[Math.min(a + 1, s.length - 1)]) * f); } if (i < segs.length - 1) pts.push(null); });
+  return pts;
+}
+function drawShape(cv, ts) { const pts = shapePts(ts), parts = []; let curp = []; pts.forEach(p => { if (p === null) { parts.push(curp); curp = []; } else curp.push(p); }); parts.push(curp);
+  const dpr = window.devicePixelRatio || 1, W = cv.clientWidth || 140, H = cv.clientHeight || 80; cv.width = W * dpr; cv.height = H * dpr; const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const total = pts.length, y = v => H / 2 - v / 6 * (H / 2 - 8); let idx = 0; g.strokeStyle = '#2f5d8a'; g.lineWidth = 5; g.lineCap = 'round';
+  parts.forEach(seg => { g.beginPath(); seg.forEach((v, k) => { const x = 10 + (idx + k) * (W - 20) / (total - 1); k ? g.lineTo(x, y(v)) : g.moveTo(x, y(v)); }); if (seg.length === 1) g.lineTo(10 + idx * (W - 20) / (total - 1) + 1, y(seg[0])); g.stroke(); idx += seg.length + 1; });
+}
+let sq = [], si = 0, slog = [];
+function startShape() {
+  stopMic(); G.clearAll(); G.$('#micmsg').innerHTML = '';
+  const a = G.pick(ORDER.slice(0, 20), 4), b = G.pick(ORDER.filter(w => !a.includes(w) && tones(w).length === 2 && !tones(w).includes(0)), 4), c = G.pick(ORDER.filter(w => !a.includes(w) && !b.includes(w) && (tones(w).length > 2 || tones(w).includes(0))), 2); // 3つの組で同じ語が2回出ないように
+  sq = [...a, ...b, ...c]; si = 0; slog = []; G.show('shape'); sask();
+}
+function variants(ts, hz) { const allN = ts.every(t => t === 0), out = new Map(); out.set(ts.join(), ts); let guard = 0; while (out.size < 4 && guard++ < 200) { const v = ts.map(t => t); const k = Math.floor(G.rand() * v.length); if (v[k] === 0 && !allN) continue; const nt = 1 + Math.floor(G.rand() * 4); if (hz && nt !== ts[k] && G.banTone(hz, k, nt)) continue; v[k] = nt; out.set(v.join(), v); } return [...out.values()]; } // 全部軽声（的）のときは軽声の音節にも1〜4声を入れて、選択肢を4つにする
+
+function sask() {
+  const w = sq[si], ts = tones(w); G.$('#sbar').style.width = (si / sq.length * 100) + '%';
+  const c = G.$('#scard'); c.innerHTML = ''; G.$('#sfb').innerHTML = ''; G.$('#snext').style.display = 'none';
+  c.append(G.h('p', { class: 'small mt0' }, `第${si + 1}問 / ${sq.length}　聞いて、声の高さの形を選ぼう`), G.zh(w.hanzi, 'big'), G.ja(w.ja), G.h('button', { class: 'btn ghost', type: 'button', onclick: () => G.play(w.audio) }, '▶ 聞く'));
+  const opts = G.shuffle(variants(ts, w.hanzi)), box = G.$('#sopts'); box.innerHTML = ''; const done = G.guard();
+  opts.forEach((v, i) => { const cv = G.h('canvas', { width: '140', height: '80' }); const b = G.h('button', { type: 'button', 'aria-label': `${i + 1}つ目の形` }, cv); b.onclick = done(() => sans(b, v, opts)); box.append(b); });
+  requestAnimationFrame(() => G.$$('#sopts canvas').forEach((cv, i) => drawShape(cv, opts[i])));
+  if (G.test) window.__t = { answer: ts.join(), opts: opts.map(v => v.join()) };
+}
+const TN = { 1: '第1声', 2: '第2声', 3: '第3声', 4: '第4声', 0: '軽声' };
+function sans(b, v, opts) {
+  const w = sq[si], ok = v.join() === tones(w).join(); G.lock(G.$('#sopts'));
+  G.$$('#sopts button').forEach((x, i) => { if (opts[i].join() === tones(w).join()) x.classList.add('ok'); }); if (!ok) b.classList.add('ng');
+  slog.push({ w, ok });
+  G.$('#sfb').append(G.h('div', { class: 'fb ' + (ok ? 'ok' : 'ng') }, G.h('p', { class: 'mt0' }, G.h('b', {}, ok ? '正解！' : '不正解'), ' ', G.h('span', { lang: 'zh-Latn-pinyin' }, w.pinyin), '　' + tones(w).map(t => TN[t]).join('＋')), G.audioBtn(w.audio),
+    tones(w).length > 1 && tones(w)[0] === 3 ? G.h('p', { class: 'small' }, '第3声の後ろに音が続くときは、低く抑えるだけ（半3声）になります。') : null));
+  const nx = G.$('#snext'); nx.textContent = si + 1 < sq.length ? '次へ' : '結果を見る'; nx.style.display = 'block'; nx.disabled = false; G.reveal(nx);
+}
+G.$('#snext').onclick = () => { const nx = G.$('#snext'); if (nx.disabled) return; nx.disabled = true; si++; if (si < sq.length) sask(); else sfinish(); };
+function sfinish() {
+  const n = slog.filter(l => l.ok).length; st.shape = Math.max(st.shape || 0, n); G.save(st);
+  G.$('#sscore').innerHTML = ''; G.$('#sscore').append(G.h('p', { style: 'font-size:30px;font-weight:700;margin:0' }, `${n} / ${slog.length}`));
+  const m = G.$('#smiss'); m.innerHTML = ''; const miss = slog.filter(l => !l.ok);
+  m.append(G.h('h3', { class: 'mt0' }, miss.length ? 'まちがえた語' : '全問正解！'));
+  miss.forEach(l => m.append(G.h('p', {}, G.zh(l.w.hanzi, 'mid'), ' ', G.h('span', { lang: 'zh-Latn-pinyin' }, l.w.pinyin), '　' + tones(l.w).map(t => TN[t]).join('＋'), ' ', G.audioBtn(l.w.audio))));
+  G.show('sres');
+}
+G.$('#goShape').onclick = startShape; G.$('#sagain').onclick = startShape;
+renderHist();
+if (G.test) window.__api = { track, contour, compare, teacher };
+</script>
+</body>
+</html>
